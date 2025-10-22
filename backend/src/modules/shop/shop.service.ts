@@ -11,7 +11,7 @@ import { ConfigService } from '@nestjs/config';
 export class ShopService {
   private static readonly DEFAULT_WHEEL_COST_BNB = new Prisma.Decimal(0.001);
   private provider: JsonRpcProvider;
-  private treasuryAddress: string;
+  private adminWalletAddress: string;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -20,7 +20,7 @@ export class ShopService {
   ) {
     const rpcEndpoint = this.configService.get<string>('BNB_RPC_ENDPOINT');
     this.provider = new JsonRpcProvider(rpcEndpoint);
-    this.treasuryAddress = (this.configService.get<string>('TREASURY_ADDRESS') || '').toLowerCase();
+    this.adminWalletAddress = (this.configService.get<string>('ADMIN_WALLET_ADDRESS') || '').toLowerCase();
   }
 
   private async getWheelCost(): Promise<Prisma.Decimal> {
@@ -568,11 +568,11 @@ export class ShopService {
     expectedAmount: Prisma.Decimal,
   ): Promise<void> {
     const provider = this.provider;
-    const treasuryAddress = this.configService.get<string>('TREASURY_ADDRESS');
+    const adminWalletAddress = this.configService.get<string>('ADMIN_WALLET_ADDRESS');
     const cfcTokenAddress = this.configService.get<string>('CFC_TOKEN_ADDRESS');
 
-    if (!treasuryAddress) {
-      throw new BadRequestException('Treasury address not configured');
+    if (!adminWalletAddress) {
+      throw new BadRequestException('Admin wallet address not configured');
     }
 
     if (!cfcTokenAddress) {
@@ -601,12 +601,12 @@ export class ShopService {
       const transferLog = receipt.logs.find(
         (log: any) => log.topics[0] === transferEventSignature &&
                log.topics[1]?.toLowerCase() === '0x' + expectedSender.slice(2).toLowerCase().padStart(64, '0') &&
-               log.topics[2]?.toLowerCase() === '0x' + treasuryAddress.slice(2).toLowerCase().padStart(64, '0')
+               log.topics[2]?.toLowerCase() === '0x' + adminWalletAddress.slice(2).toLowerCase().padStart(64, '0')
       );
 
       if (!transferLog) {
         throw new BadRequestException(
-          'No valid Transfer event found from your wallet to treasury'
+          'No valid Transfer event found from your wallet to admin wallet'
         );
       }
 
@@ -678,9 +678,9 @@ export class ShopService {
         return false;
       }
 
-      // Verify recipient (treasury)
-      if (!tx.to || tx.to.toLowerCase() !== this.treasuryAddress) {
-        console.error('[ShopService] Transaction recipient mismatch. Expected:', this.treasuryAddress, 'Got:', tx.to);
+      // Verify recipient (admin wallet)
+      if (!tx.to || tx.to.toLowerCase() !== this.adminWalletAddress) {
+        console.error('[ShopService] Transaction recipient mismatch. Expected:', this.adminWalletAddress, 'Got:', tx.to);
         return false;
       }
 
