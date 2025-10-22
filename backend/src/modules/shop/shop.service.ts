@@ -232,16 +232,36 @@ export class ShopService {
         createdChickenId = newChicken.id;
       }
 
-      // Get the created entity to include template info
+      // Get the created entity to include template info and owner data
       let createdCock = null;
       let createdChicken = null;
       
       if (createdCockId) {
-        createdCock = await tx.cock.findUnique({ where: { id: createdCockId } });
+        createdCock = await tx.cock.findUnique({ 
+          where: { id: createdCockId },
+          include: {
+            owner: {
+              select: {
+                walletAddress: true,
+                username: true,
+              },
+            },
+          },
+        });
         console.log('[Shop Service] Created cock from DB:', JSON.stringify(createdCock, null, 2));
       }
       if (createdChickenId) {
-        createdChicken = await tx.chicken.findUnique({ where: { id: createdChickenId } });
+        createdChicken = await tx.chicken.findUnique({ 
+          where: { id: createdChickenId },
+          include: {
+            owner: {
+              select: {
+                walletAddress: true,
+                username: true,
+              },
+            },
+          },
+        });
         console.log('[Shop Service] Created chicken from DB:', JSON.stringify(createdChicken, null, 2));
       }
 
