@@ -437,11 +437,11 @@ export default function FightArena({ cock1, cock2, isActive }: FightArenaProps) 
           
           // Visual feedback for being hit
           if (Date.now() - opponent.lastHitTime < 200) {
-            opponent.body.material.emissive = new THREE.Color(0xff0000);
+            (opponent.body.material as THREE.MeshStandardMaterial).emissive = new THREE.Color(0xff0000);
             opponent.group.position.x -= (toOpponent.x / distToOpponent) * 0.1;
             opponent.group.position.z -= (toOpponent.z / distToOpponent) * 0.1;
           } else {
-            opponent.body.material.emissive = new THREE.Color(0x000000);
+            (opponent.body.material as THREE.MeshStandardMaterial).emissive = new THREE.Color(0x000000);
           }
           
           // Always face opponent
