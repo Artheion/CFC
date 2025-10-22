@@ -1138,7 +1138,7 @@ const Arena = () => {
                 <div className="mt-2 text-xs text-yellow-400 text-center">
                   <div className="font-bold mb-2">⚡ Please sign BOTH wallet transactions:</div>
                   <div className="flex items-center justify-center gap-4">
-                    <div>1️⃣ Approve {formatCFC(wagerAmount || 0)} $CFC tokens</div>
+                    <div>1️⃣ Approve {formatCFC(parseFloat(wagerAmount) || 0)} $CFC tokens</div>
                     <div>2️⃣ Escrow tokens in contract</div>
                   </div>
                 </div>

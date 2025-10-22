@@ -48,7 +48,7 @@ const walletClientToBrowserProvider = (walletClient: ReturnType<typeof useWallet
     eip1193Provider.removeListener = () => {};
   }
 
-  return new BrowserProvider(eip1193Provider, walletClient.chain?.id);
+  return new BrowserProvider(eip1193Provider, (walletClient as any)?.chain?.id);
 };
 
 export const WalletProvider = ({ children }: WalletProviderProps) => {
