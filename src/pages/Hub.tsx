@@ -148,6 +148,8 @@ const Hub = () => {
       energy: maxEnergy,
       wins: 0,
       losses: 0,
+      earningsCfc: 0,
+      ownerAddress: '',
       isBreeding: false,
       lastRestTimestamp: Date.now(),
     };

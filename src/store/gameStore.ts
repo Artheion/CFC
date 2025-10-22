@@ -235,8 +235,8 @@ interface GameStore extends GameState {
   updateBNBBalance: (amount: number) => void;
   startBreeding: (cockId: string, chickenId: string) => Promise<boolean>;
   checkBreedingComplete: () => Promise<void>;
-  createFight: (cockId: string, wager: number) => Promise<boolean>;
-  joinFight: (fightQueueId: string, cockId: string) => Promise<string | null>;
+  createFight: (cockId: string, wager: number, paymentSignature?: string | null, fightId?: string) => Promise<boolean | FightQueue>;
+  joinFight: (fightQueueId: string, cockId: string, paymentSignature?: string) => Promise<string | null>;
   removeFightFromQueue: (fightQueueId: string) => Promise<void>;
   getFightById: (fightId: string) => ActiveFight | undefined;
   placeBet: (fightId: string, cockId: string, amount: number, paymentSignature?: string) => Promise<boolean>;
@@ -918,6 +918,7 @@ export const useGameStore = create<GameStore>()(
         energy: calculateMaxEnergy(FIXED_STATS.stamina, selectedRarity),
         wins: 0,
         losses: 0,
+        earningsCfc: 0,
         isBreeding: false,
         ownerAddress: state.user.walletAddress,
         ownerUsername: state.user.username,
@@ -1588,7 +1589,7 @@ export const useGameStore = create<GameStore>()(
                   if (key === 'steroids') {
                     return acc;
                   }
-                  acc[key] = value;
+                  acc[key] = typeof value === 'number' ? value : 0;
                   return acc;
                 }, {})
               : state.items,

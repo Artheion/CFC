@@ -347,7 +347,7 @@ const Arena = () => {
       // Now create fight in database with the contract transaction hash and pre-generated ID
       const createdFight = await createFight(selectedCockId, wager, result.txHash, fightId);
       
-      if (!createdFight) {
+      if (!createdFight || createdFight === true) {
         setErrorMessage('Tokens escrowed but failed to create fight in database. Please contact support with txHash: ' + result.txHash);
         setShowErrorModal(true);
         return;
