@@ -848,7 +848,23 @@ export const useGameStore = create<GameStore>()(
     if (BACKEND_ENABLED) {
       try {
         const spin = await spinWheelRequest({ wheelType, paymentSignature: paymentTxHash });
-        await get().refreshBackendState();
+        
+        // If we got a cock or chicken back, add it directly to the store first
+        const cockData = (spin as any).cock;
+        const chickenData = (spin as any).chicken;
+        
+        if (cockData) {
+          const mappedCock = mapCock(cockData, get().user?.username);
+          get().addCock(mappedCock);
+          console.log('[Store] Added cock directly from roulette:', mappedCock.id);
+        } else if (chickenData) {
+          const mappedChicken = mapChicken(chickenData);
+          get().addChicken(mappedChicken);
+          console.log('[Store] Added chicken directly from roulette:', mappedChicken.id);
+        }
+        
+        // Then refresh to get any other updates (but delay slightly to avoid race condition)
+        setTimeout(() => get().refreshBackendState(), 500);
 
         const reward = spin.resultReferenceId ?? undefined;
 
@@ -858,8 +874,8 @@ export const useGameStore = create<GameStore>()(
           rewardType: spin.resultType,
           rewardRarity: spin.resultRarity ?? null,
           metadata: spin.metadata, // Include metadata with template info
-          cock: (spin as any).cock, // Full cock data from backend
-          chicken: (spin as any).chicken, // Full chicken data from backend
+          cock: cockData, // Full cock data from backend
+          chicken: chickenData, // Full chicken data from backend
         };
       } catch (error) {
         const message = error instanceof Error && error.message ? error.message : 'Unable to spin the wheel right now.';
