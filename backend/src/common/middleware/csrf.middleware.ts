@@ -26,10 +26,6 @@ export class CsrfMiddleware implements NestMiddleware {
       },
       size: 64,
       ignoredMethods: ['GET', 'HEAD', 'OPTIONS'],
-      getTokenFromRequest: (req) => {
-        // Check header first, then body
-        return req.headers['x-csrf-token'] as string || req.body?._csrf;
-      },
     });
   }
 

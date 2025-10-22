@@ -66,7 +66,7 @@ export class AuditLogInterceptor implements NestInterceptor {
               },
             });
           } catch (error) {
-            this.logger.error('Failed to create audit log', error.stack, 'AuditLogInterceptor');
+            this.logger.error('Failed to create audit log', error instanceof Error ? error.stack : String(error), 'AuditLogInterceptor');
           }
         },
         error: async (error) => {
@@ -85,7 +85,7 @@ export class AuditLogInterceptor implements NestInterceptor {
               },
             });
           } catch (logError) {
-            this.logger.error('Failed to create error audit log', logError.stack, 'AuditLogInterceptor');
+            this.logger.error('Failed to create error audit log', logError instanceof Error ? logError.stack : String(logError), 'AuditLogInterceptor');
           }
         },
       }),

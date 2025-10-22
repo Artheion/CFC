@@ -24,5 +24,6 @@
       "@infra/*": ["src/infra/*"],
       "@shared/*": ["src/shared/*"]
     }
-  }
+  },
+  "exclude": ["node_modules", "dist", "**/*.spec.ts", "**/*.test.ts", "jest.config.ts"]
 }

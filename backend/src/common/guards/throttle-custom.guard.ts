@@ -1,11 +1,17 @@
 import { Injectable, ExecutionContext } from '@nestjs/common';
-import { ThrottlerGuard, ThrottlerException } from '@nestjs/throttler';
+import { ThrottlerGuard, ThrottlerException, ThrottlerModuleOptions, ThrottlerStorage } from '@nestjs/throttler';
+import { Reflector } from '@nestjs/core';
 import { LoggerService } from '@infra/logger/logger.service';
 
 @Injectable()
 export class CustomThrottlerGuard extends ThrottlerGuard {
-  constructor(private readonly loggerService: LoggerService) {
-    super();
+  constructor(
+    options: ThrottlerModuleOptions,
+    storageService: ThrottlerStorage,
+    reflector: Reflector,
+    private readonly loggerService: LoggerService,
+  ) {
+    super(options, storageService, reflector);
   }
 
   protected async throwThrottlingException(context: ExecutionContext): Promise<void> {
