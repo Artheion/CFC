@@ -349,20 +349,20 @@ const Shop = () => {
           return;
         }
 
-        // Send payment transaction to treasury wallet
+        // Send payment transaction to admin wallet
         if (BACKEND_ENABLED && provider) {
         try {
-          const { TREASURY_ADDRESS } = await import('../config');
+          const { ADMIN_WALLET_ADDRESS } = await import('../config');
           const { parseEther } = await import('ethers');
           
-          if (!TREASURY_ADDRESS || TREASURY_ADDRESS === 'YOUR_TREASURY_ADDRESS') {
-            setError('Treasury address not configured. Please contact support.');
+          if (!ADMIN_WALLET_ADDRESS || ADMIN_WALLET_ADDRESS === 'YOUR_ADMIN_WALLET_ADDRESS') {
+            setError('Admin wallet address not configured. Please contact support.');
             return;
           }
 
           const signer = await provider.getSigner();
           const tx = await signer.sendTransaction({
-            to: TREASURY_ADDRESS,
+            to: ADMIN_WALLET_ADDRESS,
             value: parseEther(wheelCost.toString()),
           });
 
@@ -523,7 +523,7 @@ const Shop = () => {
     
     if (BACKEND_ENABLED && provider) {
       try {
-        const { CFC_TOKEN_MINT, TREASURY_ADDRESS } = await import('../config');
+        const { CFC_TOKEN_MINT, ADMIN_WALLET_ADDRESS } = await import('../config');
         const { Contract, parseUnits } = await import('ethers');
         
         if (!CFC_TOKEN_MINT || CFC_TOKEN_MINT === 'YOUR_CFC_TOKEN_MINT') {
@@ -531,8 +531,8 @@ const Shop = () => {
           return;
         }
 
-        if (!TREASURY_ADDRESS || TREASURY_ADDRESS === 'YOUR_TREASURY_ADDRESS') {
-          setError('Treasury address not configured');
+        if (!ADMIN_WALLET_ADDRESS || ADMIN_WALLET_ADDRESS === 'YOUR_ADMIN_WALLET_ADDRESS') {
+          setError('Admin wallet address not configured');
           return;
         }
 
@@ -556,7 +556,7 @@ const Shop = () => {
         setError('Please confirm the transaction in your wallet...');
 
         // Send transfer transaction
-        const tx = await tokenContract.transfer(TREASURY_ADDRESS, amountInTokens);
+        const tx = await tokenContract.transfer(ADMIN_WALLET_ADDRESS, amountInTokens);
 
         setError('Transaction sent. Waiting for confirmation...');
 
