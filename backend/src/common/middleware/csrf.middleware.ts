@@ -16,6 +16,7 @@ export class CsrfMiddleware implements NestMiddleware {
 
     this.csrfProtection = doubleCsrf({
       getSecret: () => csrfSecret,
+      getSessionIdentifier: (req) => req.ip || 'anonymous',
       cookieName: '__Host-cfc.x-csrf-token',
       cookieOptions: {
         sameSite: 'strict',
