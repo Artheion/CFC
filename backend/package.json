@@ -15,7 +15,7 @@
     "test": "jest"
   },
   "prisma": {
-    "seed": "ts-node prisma/seed.ts"
+    "seed": "node prisma/seed.js"
   },
   "dependencies": {
     "@nestjs/cli": "^10.3.2",
