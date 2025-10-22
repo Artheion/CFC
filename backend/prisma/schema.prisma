@@ -1,0 +1,415 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                     String            @id @default(uuid())
+  walletAddress          String            @unique
+  username               String?
+  avatarUrl              String?
+  bnbBalance             Decimal           @default(0) @db.Decimal(18, 9)
+  cfcWithdrawn           Decimal           @default(0) @db.Decimal(18, 9)
+  lastCfcWithdrawalAt    DateTime?
+  isAdmin                Boolean           @default(false)
+  hasCompletedOnboarding Boolean           @default(false)
+  referredByCode         String?
+  referredBy             ReferralCode?     @relation("ReferralUsed", fields: [referredByCode], references: [code])
+  hasUsedFreeSpin        Boolean           @default(false)
+  isBanned               Boolean           @default(false)
+  banReason              String?
+  lastLogin              DateTime?
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+  referralCode           ReferralCode?
+  referralJoins          ReferralJoin[]    @relation("ReferralJoinUser")
+  cocks                  Cock[]
+  chickens               Chicken[]
+  eggs                   Egg[]
+  breedingSessions       BreedingSession[]
+  inventory              InventoryItem[]
+  spectatorBets          SpectatorBet[]
+  wheelSpins             WheelSpin[]
+  transactionsOut        Transaction[]     @relation("TransactionFromUser")
+  transactionsIn         Transaction[]     @relation("TransactionToUser")
+  refreshTokens          RefreshToken[]
+}
+
+model ReferralCode {
+  id                   String         @id @default(uuid())
+  code                 String         @unique
+  ownerId              String         @unique
+  ownerWallet          String
+  ownerUsername        String?
+  discountPercent      Float          @default(0)
+  freeWheelSpins       Int            @default(0)
+  earningsSharePercent Float          @default(5)
+  totalUses            Int            @default(0)
+  totalEarnedBnb       Decimal        @default(0) @db.Decimal(18, 9)
+  totalWithdrawnBnb    Decimal        @default(0) @db.Decimal(18, 9)
+  lastWithdrawalAt     DateTime?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  owner                User           @relation(fields: [ownerId], references: [id])
+  referredUsers        User[]         @relation("ReferralUsed")
+  joins                ReferralJoin[]
+}
+
+model ReferralJoin {
+  id             String       @id @default(uuid())
+  referralCodeId String
+  joinedUserId   String
+  joinedWallet   String
+  joinedAt       DateTime     @default(now())
+  earningsPaid   Decimal      @default(0) @db.Decimal(18, 9)
+  referralCode   ReferralCode @relation(fields: [referralCodeId], references: [id])
+  joinedUser     User         @relation("ReferralJoinUser", fields: [joinedUserId], references: [id])
+
+  @@unique([referralCodeId, joinedUserId])
+  @@index([referralCodeId])
+}
+
+model Cock {
+  id               String            @id @default(uuid())
+  templateId       String
+  ownerId          String
+  name             String
+  description      String?
+  image            String
+  rarity           CockRarity
+  attack           Int
+  defence          Int
+  stamina          Int
+  speed            Int
+  health           Int               @default(100)
+  energy           Int               @default(0)
+  maxEnergy        Int               @default(300)
+  lastRestedAt     DateTime?
+  lastRecoveryAt   DateTime?
+  healthUpdatedAt  DateTime?
+  energyUpdatedAt  DateTime?
+  wins             Int               @default(0)
+  losses           Int               @default(0)
+  earningsCfc      Decimal           @default(0) @db.Decimal(18, 9)
+  isBreeding       Boolean           @default(false)
+  breedingEndTime  DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  owner            User              @relation(fields: [ownerId], references: [id])
+  fightsAsCock1    Fight[]           @relation("FightCock1")
+  fightsAsCock2    Fight[]           @relation("FightCock2")
+  fightsWon        Fight[]           @relation("FightWinner")
+  breedingSessions BreedingSession[]
+
+  @@index([ownerId])
+}
+
+model Chicken {
+  id               String            @id @default(uuid())
+  templateId       String
+  ownerId          String
+  name             String
+  description      String?
+  image            String
+  rarity           ChickenRarity
+  isBreeding       Boolean           @default(false)
+  breedingEndTime  DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  owner            User              @relation(fields: [ownerId], references: [id])
+  breedingSessions BreedingSession[]
+
+  @@index([ownerId])
+}
+
+model Egg {
+  id              String           @id @default(uuid())
+  ownerId         String
+  image           String
+  hatchTimeMs     Int
+  isIncubating    Boolean          @default(false)
+  incubationStart DateTime?
+  parentCockId    String?
+  parentChickenId String?
+  status          EggStatus        @default(FRESH)
+  readyAt         DateTime?
+  hatchedAt       DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  owner           User             @relation(fields: [ownerId], references: [id])
+  breedingSession BreedingSession?
+
+  @@index([ownerId])
+  @@index([status])
+}
+
+model ItemCatalog {
+  id             String          @id @default(uuid())
+  slug           String          @unique
+  name           String
+  description    String
+  type           ItemType
+  priceBnb       Decimal         @default(0) @db.Decimal(18, 9)
+  priceCfc       Decimal         @default(0) @db.Decimal(18, 9)
+  isActive       Boolean         @default(true)
+  maxPerUser     Int?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  inventoryItems InventoryItem[]
+}
+
+model InventoryItem {
+  id            String      @id @default(uuid())
+  userId        String
+  itemCatalogId String
+  quantity      Int         @default(0)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  user          User        @relation(fields: [userId], references: [id])
+  itemCatalog   ItemCatalog @relation(fields: [itemCatalogId], references: [id])
+
+  @@unique([userId, itemCatalogId])
+}
+
+model BreedingSession {
+  id          String         @id @default(uuid())
+  userId      String
+  cockId      String
+  chickenId   String
+  eggId       String?        @unique
+  status      BreedingStatus @default(ACTIVE)
+  startedAt   DateTime       @default(now())
+  completesAt DateTime
+  completedAt DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  user        User           @relation(fields: [userId], references: [id])
+  cock        Cock           @relation(fields: [cockId], references: [id])
+  chicken     Chicken        @relation(fields: [chickenId], references: [id])
+  egg         Egg?           @relation(fields: [eggId], references: [id])
+
+  @@index([userId, status])
+  @@index([completesAt])
+}
+
+model Fight {
+  id                  String         @id @default(uuid())
+  cock1Id             String
+  cock2Id             String?
+  winnerCockId        String?
+  wager               Decimal        @db.Decimal(18, 9)
+  status              FightStatus
+  startedAt           DateTime?
+  settledAt           DateTime?
+  rakePaid            Decimal        @default(0) @db.Decimal(18, 9)
+  referralPaid        Decimal        @default(0) @db.Decimal(18, 9)
+  queueId             String?        @unique
+  cock1StakeSignature String?
+  cock2StakeSignature String?
+  payoutSignature     String?
+  refundSignature     String?
+  refundStatus        String?
+  refundAttempts      Int            @default(0)
+  metadata            Json?
+  houseRakeBps        Int            @default(700)
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  cock1               Cock           @relation("FightCock1", fields: [cock1Id], references: [id])
+  cock2               Cock?          @relation("FightCock2", fields: [cock2Id], references: [id])
+  winnerCock          Cock?          @relation("FightWinner", fields: [winnerCockId], references: [id])
+  rounds              FightRound[]
+  spectatorBets       SpectatorBet[]
+  transactions        Transaction[]
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model FightRound {
+  id          String   @id @default(uuid())
+  fightId     String
+  roundNo     Int
+  winnerCock  String?
+  cock1Health Int
+  cock2Health Int
+  durationMs  Int?
+  createdAt   DateTime @default(now())
+  fight       Fight    @relation(fields: [fightId], references: [id])
+}
+
+model SpectatorBet {
+  id              String             @id @default(uuid())
+  fightId         String
+  userId          String
+  cockId          String
+  amount          Decimal            @db.Decimal(18, 9)
+  placedAt        DateTime           @default(now())
+  odds            Decimal?           @db.Decimal(10, 4)
+  status          SpectatorBetStatus @default(PENDING)
+  payoutAmount    Decimal?           @db.Decimal(18, 9)
+  payoutSignature String?
+  metadata        Json?
+  fight           Fight              @relation(fields: [fightId], references: [id])
+  user            User               @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([fightId])
+}
+
+model WheelSpin {
+  id                String          @id @default(uuid())
+  userId            String
+  resultType        WheelSpinResult
+  resultReferenceId String?
+  resultRarity      String?
+  costBnb           Decimal         @db.Decimal(18, 9)
+  referralPaid      Decimal         @default(0) @db.Decimal(18, 9)
+  signature         String?
+  metadata          Json?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  transactions      Transaction[]
+  user              User            @relation(fields: [userId], references: [id])
+}
+
+model Transaction {
+  id          String            @id @default(uuid())
+  fromUserId  String?
+  toUserId    String?
+  fromWallet  String
+  toWallet    String?
+  amount      Decimal           @db.Decimal(18, 9)
+  type        TransactionType
+  status      TransactionStatus @default(PENDING)
+  signature   String?
+  metadata    Json?
+  fightId     String?
+  wheelSpinId String?
+  createdAt   DateTime          @default(now())
+  confirmedAt DateTime?
+  failedAt    DateTime?
+
+  fromUser  User?      @relation("TransactionFromUser", fields: [fromUserId], references: [id])
+  toUser    User?      @relation("TransactionToUser", fields: [toUserId], references: [id])
+  fight     Fight?     @relation(fields: [fightId], references: [id])
+  wheelSpin WheelSpin? @relation(fields: [wheelSpinId], references: [id])
+
+  @@unique([signature])
+  @@index([fromWallet])
+  @@index([toWallet])
+  @@index([status])
+  @@index([type])
+}
+
+model AppConfig {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}
+
+model AdminAuditLog {
+  id        String   @id @default(uuid())
+  adminId   String
+  action    String
+  details   Json
+  createdAt DateTime @default(now())
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+enum CockRarity {
+  common
+  uncommon
+  rare
+  epic
+  legendary
+}
+
+enum ChickenRarity {
+  common
+  uncommon
+  rare
+  epic
+  legendary
+}
+
+enum FightStatus {
+  QUEUED
+  BETTING
+  FIGHTING
+  FINISHED
+  CANCELLED
+}
+
+enum ItemType {
+  MEDKIT
+  CAPSULE
+  CUSTOM
+}
+
+enum BreedingStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum EggStatus {
+  FRESH
+  INCUBATING
+  READY_TO_HATCH
+  HATCHED
+}
+
+enum SpectatorBetStatus {
+  PENDING
+  WON
+  LOST
+  REFUNDED
+}
+
+enum WheelSpinResult {
+  COCK
+  CHICKEN
+  ITEM
+  NOTHING
+}
+
+enum TransactionType {
+  WAGER
+  PAYOUT
+  REFERRAL
+  PURCHASE
+  REFUND
+  HOUSE
+  WITHDRAWAL
+  FIGHT_WAGER
+  FIGHT_REFUND
+  FIGHT_PAYOUT
+  SHOP_PURCHASE
+  ROULETTE_SPIN
+}
+
+enum TransactionStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+}

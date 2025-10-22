@@ -1,0 +1,103 @@
+# Dependencies
+node_modules/
+backend/node_modules/
+
+# Environment variables - NEVER commit these
+.env
+.env.local
+.env.production
+.env.test
+backend/.env
+backend/.env.local
+backend/.env.production
+
+# Build outputs
+dist/
+build/
+backend/dist/
+backend/build/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+backend/logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+*.sublime-workspace
+*.sublime-project
+
+# Testing
+coverage/
+.nyc_output/
+backend/coverage/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Prisma
+backend/prisma/*.db
+backend/prisma/*.db-journal
+
+# TypeScript
+*.tsbuildinfo
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn
+.yarn-integrity
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+
+# Miscellaneous
+.next/
+.nuxt/
+.cache/
+.parcel-cache/
+
+# Local Netlify folder
+.netlify
+
+# Firebase
+.firebase/
+
+# Vercel
+.vercel

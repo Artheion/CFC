@@ -1,0 +1,176 @@
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Hide RainbowKit chain switch modal completely */
+div[role="dialog"][aria-labelledby*="rk_chain"] {
+  display: none !important;
+}
+
+/* Hide chain switch button in account modal */
+button[aria-label*="Switch"] {
+  display: none !important;
+}
+
+@keyframes countdown-grow {
+  0% {
+    transform: scale(0.4);
+    opacity: 0.2;
+  }
+  50% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+@keyframes metallic-rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.countdown-scale {
+  animation: countdown-grow 1s ease-out forwards;
+}
+
+@layer base {
+  * {
+    @apply border-white/10;
+  }
+  
+  body {
+    @apply bg-background-light dark:bg-background-dark text-white antialiased font-display;
+  }
+  
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 10px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    @apply bg-background-dark;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    @apply bg-card-dark hover:bg-primary rounded-full;
+  }
+}
+
+@layer utilities {
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;  /* Chrome, Safari and Opera */
+  }
+
+  /* Page transition animations */
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  .page-transition {
+    animation: fadeIn 0.2s ease-in;
+  }
+
+  /* Modal animations */
+  .animate-fadeIn {
+    animation: fadeIn 0.2s ease-out;
+  }
+
+  @keyframes fadeOut {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+
+  .animate-fadeOut {
+    animation: fadeOut 0.2s ease-in;
+  }
+
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  .animate-scaleIn {
+    animation: scaleIn 0.2s ease-out;
+  }
+
+  @keyframes scaleOut {
+    from {
+      opacity: 1;
+      transform: scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+  }
+
+  .animate-scaleOut {
+    animation: scaleOut 0.2s ease-in;
+  }
+
+  @keyframes modalPop {
+    0% {
+      transform: scale(0.85);
+      opacity: 0;
+    }
+    55% {
+      transform: scale(1.05);
+      opacity: 1;
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  .modal-pop {
+    animation: modalPop 0.38s cubic-bezier(0.22, 1.2, 0.36, 1) forwards;
+  }
+}
+
+/* Override wallet button rounded corners */
+.wallet-adapter-button {
+  border-radius: 0 !important;
+}
+
+.wallet-adapter-button-trigger {
+  border-radius: 0 !important;
+}
+
+.wallet-adapter-modal {
+  border-radius: 0 !important;
+}
+
+.wallet-adapter-modal-wrapper {
+  border-radius: 0 !important;
+}
