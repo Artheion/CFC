@@ -38,6 +38,7 @@
     "@types/passport-jwt": "^3.0.10",
     "@types/qrcode": "^1.5.5",
     "@types/socket.io": "^3.0.2",
+    "@types/speakeasy": "^2.0.10",
     "@types/uuid": "^9.0.7",
     "bcrypt": "^5.1.1",
     "bullmq": "^4.12.4",
@@ -69,7 +70,6 @@
   "devDependencies": {
     "@nestjs/schematics": "^10.1.1",
     "@nestjs/testing": "^10.3.2",
-    "@types/speakeasy": "^2.0.10",
     "eslint": "^8.56.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-import": "^2.29.1",
