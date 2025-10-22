@@ -71,10 +71,12 @@ export interface Item {
 }
 
 export interface ShopCatalogItem {
+  id?: string;
   slug: string;
   name: string;
   description: string;
   price: number;
+  image?: string;
   type: 'capsule' | 'medkit' | 'custom';
   maxPerUser?: number;
 }
@@ -100,7 +102,7 @@ export interface FightQueue {
   wager: number;
   createdAt: number;
   ownerAddress: string;
-  status?: 'QUEUED' | 'BETTING';
+  status?: 'QUEUED' | 'BETTING' | 'FIGHTING' | 'FINISHED' | 'CANCELLED';
   cock?: Cock;
 }
 
@@ -118,6 +120,7 @@ export interface ActiveFight {
   cock2Id: string;
   cock1?: Cock;
   cock2?: Cock;
+  metadata?: any;
   wager: number;
   status: 'betting' | 'fighting' | 'finished';
   rounds: FightRound[];

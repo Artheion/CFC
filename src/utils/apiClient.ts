@@ -256,6 +256,7 @@ export interface BackendReferralCode {
   earningsSharePercent: number;
   totalUses: number;
   totalEarnedBnb: string;
+  createdAt?: string;
   joins?: Array<{
     joinedWallet: string;
     joinedAt: string;
@@ -282,12 +283,14 @@ export interface BackendFight {
   id: string;
   cock1Id: string;
   cock2Id?: string | null;
+  winnerCockId?: string | null;
   wager: string;
   status: 'QUEUED' | 'BETTING' | 'FIGHTING' | 'FINISHED' | 'CANCELLED';
   createdAt: string;
   updatedAt: string;
   cock1: BackendCock;
   cock2?: BackendCock | null;
+  metadata?: any;
   rounds?: Array<{
     roundNo: number;
     winnerCock?: string | null;
@@ -404,6 +407,7 @@ export async function fetchReferralInfo() {
     ownReferralCode?: string;
     ownReferralEarnings: string;
     totalEarnedFromReferrals?: string;
+    lastWithdrawalAt?: string | null;
   }>('/users/referral-info');
 }
 
@@ -594,17 +598,3 @@ export async function listActiveBreedingSessions() {
 export function getStoredTokens() {
   return { accessToken, refreshToken };
 }
-
-export type {
-  BackendCock,
-  BackendChicken,
-  BackendEgg,
-  BackendInventoryItem,
-  BackendReferralCode,
-  BackendFight,
-  BackendSpectatorBet,
-  BackendCatalogItem,
-  BackendWheelSpin,
-  BackendLeaderboardEntry,
-  BackendLeaderboardResponse,
-};
