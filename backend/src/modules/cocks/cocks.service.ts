@@ -9,6 +9,8 @@ export class CocksService {
   constructor(private readonly prisma: PrismaService) {}
 
   async listUserCocks(userId: string) {
+    console.log('[CocksService] listUserCocks called with userId:', userId);
+    
     const cocks = await this.prisma.cock.findMany({
       where: { ownerId: userId },
       orderBy: { createdAt: 'asc' },
@@ -21,6 +23,11 @@ export class CocksService {
         },
       },
     });
+
+    console.log('[CocksService] Found', cocks.length, 'cocks for user:', userId);
+    if (cocks.length > 0) {
+      console.log('[CocksService] First cock:', JSON.stringify(cocks[0], null, 2));
+    }
 
     const recoveredCocks = await Promise.all(cocks.map((cock) => this.applyPassiveRecoveryIfNeeded(cock.id, cock)));
     
