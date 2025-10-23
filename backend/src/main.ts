@@ -95,12 +95,10 @@ async function bootstrap() {
   if (isProduction && (parsedOrigins.length === 0 || parsedOrigins.includes('*'))) {
     loggerService.warn(
       '⚠️  WARNING: CORS_ORIGIN not properly configured for production!',
-      '',
       'Bootstrap',
     );
     loggerService.warn(
       '   Using wildcard (*) - Set specific domains in CORS_ORIGIN environment variable',
-      '',
       'Bootstrap',
     );
     // Don't throw - allow app to start with warning
@@ -127,7 +125,7 @@ async function bootstrap() {
   await prismaService.enableShutdownHooks(app);
 
   const port = configService.get<number>('PORT', 4000);
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0'); // Bind to all interfaces (required for Render/Docker)
 
   loggerService.log(`🚀 CFC backend listening on port ${port}`, 'Bootstrap');
   loggerService.log(`🔒 Environment: ${configService.get<string>('NODE_ENV')}`, 'Bootstrap');
