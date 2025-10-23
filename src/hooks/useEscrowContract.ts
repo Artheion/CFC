@@ -189,17 +189,43 @@ export const useEscrowContract = () => {
       const amountWei = parseUnits(amount, 18);
 
       console.log(`Approving ${amount} CFC tokens to escrow contract...`);
+      console.log(`Token contract: ${CFC_TOKEN_ADDRESS}`);
+      console.log(`Escrow contract: ${ESCROW_CONTRACT_ADDRESS}`);
+      console.log(`Amount: ${amountWei.toString()} wei`);
       
       const tx = await tokenContract.approve(ESCROW_CONTRACT_ADDRESS, amountWei);
-      console.log('Approval transaction sent:', tx.hash);
+      console.log('✅ Approval transaction sent:', tx.hash);
       
       await tx.wait();
-      console.log('Approval confirmed!');
+      console.log('✅ Approval confirmed!');
       
       return { success: true, txHash: tx.hash };
     } catch (err: any) {
-      const message = err.message || 'Failed to approve tokens';
-      console.error('Approval error:', err);
+      console.error('❌ Approval error:', err);
+      console.error('❌ Error code:', err.code);
+      console.error('❌ Error message:', err.message);
+      console.error('❌ Error details:', err.details);
+      
+      let message = 'Failed to approve tokens';
+      
+      // Detect specific error types
+      if (err.code === 'ACTION_REJECTED' || err.message?.toLowerCase().includes('user rejected')) {
+        message = 'Transaction was rejected by user';
+      } else if (err.code === -32603 || err.message?.includes('internal error') || err.message?.includes('does not have a transaction hash')) {
+        message = 'RPC connection error. The BSC Testnet RPC is having issues. Please try again in a few moments, or switch to a different RPC in MetaMask settings.';
+      } else if (err.message?.includes('insufficient funds')) {
+        message = 'Insufficient BNB for gas fees. You need BNB in your wallet to pay for transaction fees.';
+      } else if (err.message?.includes('nonce')) {
+        message = 'Nonce error. Please reset your MetaMask account (Settings > Advanced > Clear activity tab data) and try again.';
+      } else if (err.message?.includes('timeout') || err.message?.includes('timed out')) {
+        message = 'Transaction timeout. The RPC endpoint is too slow. Please try again or switch RPC in MetaMask.';
+      } else if (err.message?.includes('network') || err.message?.includes('connection')) {
+        message = 'Network connection issue. Please check your internet connection and try again.';
+      } else if (err.message) {
+        message = err.message;
+      }
+      
+      console.error('❌ User-friendly error message:', message);
       setError(message);
       return { success: false };
     } finally {

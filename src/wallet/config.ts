@@ -46,6 +46,22 @@ const connectors = connectorsForWallets(
   },
 );
 
+// Multiple RPC endpoints for redundancy (will fallback automatically)
+const bscMainnetRPCs = [
+  RPC_ENDPOINT,
+  'https://bsc-dataseed1.bnbchain.org',
+  'https://bsc-dataseed2.bnbchain.org',
+  'https://bsc-dataseed1.binance.org',
+];
+
+const bscTestnetRPCs = [
+  RPC_ENDPOINT,
+  'https://bsc-testnet.publicnode.com',
+  'https://data-seed-prebsc-1-s1.binance.org:8545',
+  'https://data-seed-prebsc-2-s1.binance.org:8545',
+  'https://bsc-testnet-rpc.publicnode.com',
+];
+
 // Use createConfig with multiInjectedProviderDiscovery disabled
 // This prevents RainbowKit from auto-detecting injected wallets like Phantom
 export const wagmiConfig = createConfig({
@@ -53,8 +69,18 @@ export const wagmiConfig = createConfig({
   connectors,
   multiInjectedProviderDiscovery: false, // KEY: This stops auto-detection of Phantom!
   transports: {
-    [bsc.id]: http(BNB_NETWORK === 'mainnet' ? RPC_ENDPOINT : 'https://bsc-dataseed1.bnbchain.org'),
-    [bscTestnet.id]: http(BNB_NETWORK === 'testnet' ? RPC_ENDPOINT : 'https://bsc-testnet.publicnode.com'),
+    // Mainnet: Use first available RPC with fallback
+    [bsc.id]: http(BNB_NETWORK === 'mainnet' ? bscMainnetRPCs[0] : bscMainnetRPCs[1], {
+      timeout: 10000, // 10 second timeout
+      retryCount: 3,
+      retryDelay: 1000, // 1 second between retries
+    }),
+    // Testnet: Use first available RPC with fallback
+    [bscTestnet.id]: http(BNB_NETWORK === 'testnet' ? bscTestnetRPCs[0] : bscTestnetRPCs[1], {
+      timeout: 10000, // 10 second timeout
+      retryCount: 3,
+      retryDelay: 1000, // 1 second between retries
+    }),
   },
   ssr: false,
 });
