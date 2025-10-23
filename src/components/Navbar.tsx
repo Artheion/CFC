@@ -5,7 +5,7 @@ import { useGameStore } from '../store/gameStore';
 import { ADMIN_WALLET_ADDRESS } from '../config';
 import cfcLogo from '../assets/CFC-Logo.png';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { authenticateWithWallet, isCurrentlyAuthenticating, getAccessToken } from '../utils/apiClient';
+import { authenticateWithWallet, clearAuthenticationCache, getAccessToken } from '../utils/apiClient';
 import { useWalletContext } from '../contexts/WalletContext';
 import { useTranslation } from 'react-i18next';
 import LanguageSwitcher from './LanguageSwitcher';
@@ -16,9 +16,7 @@ const BACKEND_ENABLED = Boolean(import.meta.env.VITE_API_BASE_URL);
 const Navbar = () => {
   const { t } = useTranslation();
   const location = useLocation();
-  const attemptedAddresses = useRef<Set<string>>(new Set());
-  const isAuthenticating = useRef(false);
-  const authenticationPromise = useRef<Promise<void> | null>(null);
+  const isAuthenticatingRef = useRef(false);
   const {
     address,
     provider,
@@ -34,7 +32,6 @@ const Navbar = () => {
   const logout = useGameStore((state) => state.logout);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isBalanceLoading, setIsBalanceLoading] = useState(false);
-  const [lastAuthAttemptAddress, setLastAuthAttemptAddress] = useState<string | null>(null);
   
   const checksummedAdmin = useMemo(() => ADMIN_WALLET_ADDRESS?.toLowerCase(), []);
 
@@ -42,108 +39,57 @@ const Navbar = () => {
 
   // Initialize user when wallet connects and fetch real BNB balance
   useEffect(() => {
-    let cancelled = false;
-    
     const authenticate = async () => {
       const currentAddress = address?.toLowerCase();
       
-      if (!currentAddress || !provider) {
+      if (!currentAddress || !provider || !isCorrectNetwork) {
         return;
       }
       
-      // CRITICAL FIX: Skip if already authenticated with valid token
+      // Skip if already authenticating
+      if (isAuthenticatingRef.current) {
+        console.log('[Navbar] ⏳ Authentication already in progress, skipping');
+        return;
+      }
+      
+      // Check if already authenticated with valid token
       if (user && user.walletAddress?.toLowerCase() === currentAddress) {
         const token = getAccessToken();
         if (token) {
-          console.log('[Navbar] ✅ Already authenticated with valid token, skipping');
+          console.log('[Navbar] ✅ Already authenticated with valid token');
           return;
         }
       }
-      
-      // Prevent duplicate auth for same address
-      if (attemptedAddresses.current.has(currentAddress)) {
-        console.log('[Navbar] Already attempted auth for this address, skipping');
-        return;
-      }
-      
-      // Prevent multiple simultaneous authentication attempts
-      if (isAuthenticating.current) {
-        console.log('[Navbar] Already authenticating, waiting for completion...');
-        if (authenticationPromise.current) {
-          await authenticationPromise.current;
-        }
-        return;
-      }
 
-      isAuthenticating.current = true;
-      attemptedAddresses.current.add(currentAddress);
-      
-      // Create authentication promise for others to wait on
-      let resolveAuth: (() => void) | undefined;
-      authenticationPromise.current = new Promise<void>((resolve) => {
-        resolveAuth = resolve;
-      });
-      
-      let cancelled = false;
+      isAuthenticatingRef.current = true;
       console.log('[Navbar] 🚀 Authenticating wallet:', address);
-      setLastAuthAttemptAddress(address);
 
-      const run = async () => {
-        try {
-          setLoading(true);
-          if (!provider) {
-            throw new Error('Wallet provider unavailable');
-          }
-          
-          const authResult = await authenticateWithWallet(provider);
-          
-          if (cancelled) {
-            return;
-          }
-          
-          // Set the user from auth result so refreshBackendState can proceed
-          if (authResult.user) {
-            const mappedUser = mapUser(authResult.user);
-            setUser(mappedUser);
-            
-            // Wait longer to ensure tokens are fully written to localStorage
-            // This prevents race condition where refreshBackendState runs before token is available
-            await new Promise(resolve => setTimeout(resolve, 300));
-          }
-          
-          // Additional check: verify token exists before calling refreshBackendState
-          const hasToken = localStorage.getItem('access_token') || localStorage.getItem('accessToken');
-          if (!hasToken) {
-            console.error('[Navbar] Token not found after authentication, retrying...');
-            await new Promise(resolve => setTimeout(resolve, 200));
-          }
-          
-          await refreshBackendState();
-          console.log('[Navbar] ✅ Authentication complete');
-        } catch (error) {
-          console.error('[Navbar] Failed to authenticate with backend:', error);
-          
-          // Reset so user can try again
-          if (!cancelled) {
-            setLastAuthAttemptAddress(null);
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-            console.warn('[Navbar] Authentication failed, user can retry. Error:', errorMessage);
-          }
-        } finally {
-          if (!cancelled) {
-            setLoading(false);
-          }
-          isAuthenticating.current = false;
-          authenticationPromise.current = null;
-          resolveAuth?.();
+      try {
+        setLoading(true);
+        
+        const authResult = await authenticateWithWallet(provider);
+        
+        // Set the user from auth result
+        if (authResult.user && Object.keys(authResult.user).length > 0) {
+          const mappedUser = mapUser(authResult.user);
+          setUser(mappedUser);
+          console.log('[Navbar] ✅ User set from auth result');
         }
-      };
-
-      void run();
-
-      return () => {
-        cancelled = true;
-      };
+        
+        // Refresh all game state from backend
+        await refreshBackendState();
+        console.log('[Navbar] ✅ Authentication and state refresh complete');
+      } catch (error) {
+        console.error('[Navbar] ❌ Authentication failed:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.error('[Navbar] Error details:', errorMessage);
+        
+        // Clear authentication cache to allow retry
+        clearAuthenticationCache();
+      } finally {
+        setLoading(false);
+        isAuthenticatingRef.current = false;
+      }
     };
 
     // Call authenticate if backend is enabled

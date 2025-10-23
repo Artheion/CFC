@@ -54,22 +54,22 @@ import { BreedingModule } from './modules/breeding/breeding.module';
       {
         name: 'short',
         ttl: 10000, // 10 seconds
-        limit: 100, // 100 requests per 10 seconds (increased for burst protection)
+        limit: 1000, // 1000 requests per 10 seconds (very generous for smooth UX)
       },
       {
         name: 'default',
         ttl: 60000, // 1 minute in milliseconds
-        limit: 500, // 500 requests per minute (generous limit with frontend caching)
+        limit: 5000, // 5000 requests per minute (NOTE: GET requests are exempt)
       },
       {
         name: 'auth',
         ttl: 900000, // 15 minutes in milliseconds
-        limit: 10, // 10 login attempts per 15 minutes (increased for retries)
+        limit: 50, // 50 login attempts per 15 minutes (generous for retries/testing)
       },
       {
         name: 'expensive',
         ttl: 60000, // 1 minute
-        limit: 20, // 20 expensive operations per minute (increased for active gameplay)
+        limit: 100, // 100 expensive operations per minute (fights, bets, purchases)
       },
     ]),
     LoggerModule,

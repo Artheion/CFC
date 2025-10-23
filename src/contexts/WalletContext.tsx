@@ -3,7 +3,7 @@ import { BrowserProvider, getAddress } from 'ethers';
 import { useAccount, useDisconnect, useSwitchChain, useWalletClient } from 'wagmi';
 import { useConnectModal } from '@rainbow-me/rainbowkit';
 import { bsc } from 'wagmi/chains';
-import { clearTokens } from '../utils/apiClient';
+import { clearTokens, clearAuthenticationCache } from '../utils/apiClient';
 import { useGameStore } from '../store/gameStore';
 
 import { BNB_CHAIN_CONFIG } from '../config';
@@ -81,11 +81,12 @@ export const WalletProvider = ({ children }: WalletProviderProps) => {
   // Handle wallet disconnection events
   useEffect(() => {
     if (!isConnected) {
-      // Clear tokens and user state when wallet disconnects
+      // Clear tokens, authentication cache, and user state when wallet disconnects
       clearTokens();
+      clearAuthenticationCache();
       const { setUser } = useGameStore.getState();
       setUser(null);
-      console.log('[WalletContext] Wallet disconnected, cleared session');
+      console.log('[WalletContext] ✅ Wallet disconnected, cleared all session data');
     }
   }, [isConnected]);
   const { data: walletClient } = useWalletClient();
@@ -128,8 +129,9 @@ export const WalletProvider = ({ children }: WalletProviderProps) => {
   }, [openConnectModal]);
 
   const disconnect = useCallback(() => {
-    // Clear authentication tokens
+    // Clear authentication tokens and cache
     clearTokens();
+    clearAuthenticationCache();
     
     // Clear user state from game store
     const { setUser } = useGameStore.getState();
@@ -138,7 +140,7 @@ export const WalletProvider = ({ children }: WalletProviderProps) => {
     // Disconnect wallet
     void disconnectAsync?.();
     
-    console.log('[WalletContext] ✅ Disconnected and cleared session');
+    console.log('[WalletContext] ✅ Disconnected and cleared all session data');
   }, [disconnectAsync]);
 
   const switchToExpectedNetwork = useCallback(async () => {

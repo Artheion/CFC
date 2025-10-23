@@ -17,6 +17,7 @@ export class AuthService {
   private static readonly NONCE_TTL_MS = 5 * 60 * 1000;
   private static readonly SIGN_MESSAGE_HEADER = 'CFC Authentication';
   private static readonly REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+  private static readonly ACCESS_TOKEN_TTL = '15m'; // 15 minutes - short-lived for security
 
   constructor(
     private readonly prisma: PrismaService,
@@ -170,7 +171,11 @@ export class AuthService {
 
   private async generateTokens(user: { id: string; walletAddress: string }) {
     const payload = { sub: user.id, walletAddress: user.walletAddress };
-    const accessToken = await this.jwtService.signAsync(payload);
+    
+    // Short-lived access token (15 minutes)
+    const accessToken = await this.jwtService.signAsync(payload, {
+      expiresIn: AuthService.ACCESS_TOKEN_TTL,
+    });
 
     const tokenId = randomUUID();
     const secret = randomBytes(48).toString('hex');
@@ -187,7 +192,32 @@ export class AuthService {
       },
     });
 
-    return { accessToken, refreshToken };
+    return { accessToken, refreshToken, tokenId };
+  }
+
+  /**
+   * Refresh access token using refresh token from HttpOnly cookie
+   * Used for silent token refresh on frontend
+   */
+  async refreshFromCookie(refreshTokenId: string, refreshTokenSecret: string) {
+    const refreshToken = `${refreshTokenId}.${refreshTokenSecret}`;
+    return this.refresh(refreshToken);
+  }
+
+  /**
+   * Revoke a specific refresh token (for logout)
+   */
+  async revokeRefreshToken(tokenId: string) {
+    try {
+      await this.prisma.refreshToken.update({
+        where: { id: tokenId },
+        data: { revokedAt: new Date() },
+      });
+      return true;
+    } catch (error) {
+      console.error('[AUTH] Failed to revoke refresh token:', error);
+      return false;
+    }
   }
 
   private buildSignMessage(walletAddress: string, nonce: string, issuedAt: number) {

@@ -6,80 +6,97 @@ interface RequestOptions extends RequestInit {
 }
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:4000/api';
-const ACCESS_TOKEN_KEY = 'cfc.accessToken';
-const REFRESH_TOKEN_KEY = 'cfc.refreshToken';
 
-let accessToken: string | null = localStorage.getItem(ACCESS_TOKEN_KEY);
-let refreshToken: string | null = localStorage.getItem(REFRESH_TOKEN_KEY);
+// ✅ SECURITY: Tokens now stored in HttpOnly cookies (not localStorage!)
+// Access token in memory only for display purposes (optional)
+let inMemoryAccessToken: string | null = null;
 
 const jsonHeaders = {
   'Content-Type': 'application/json',
 };
 
-async function refreshAccessToken(): Promise<void> {
-  if (!refreshToken) {
-    throw new Error('Missing refresh token');
-  }
+/**
+ * ✅ SECURITY UPGRADE: Silent token refresh using HttpOnly cookies
+ * No longer needs refresh token parameter - it's in HttpOnly cookie!
+ */
+async function refreshAccessToken(): Promise<boolean> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: 'POST',
+      headers: jsonHeaders,
+      credentials: 'include', // ✅ Send HttpOnly cookies
+    });
 
-  const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
-    method: 'POST',
-    headers: jsonHeaders,
-    body: JSON.stringify({ refreshToken }),
-  });
+    if (!response.ok) {
+      console.log('[API] Token refresh failed, clearing session');
+      inMemoryAccessToken = null;
+      return false;
+    }
 
-  if (!response.ok) {
-    throw new Error('Failed to refresh access token');
-  }
+    const data = await response.json();
+    
+    if (data.authenticated && data.user) {
+      console.log('[API] ✅ Token refreshed successfully');
+      return true;
+    }
 
-  const data = await response.json();
-  setTokens(data.accessToken, data.refreshToken ?? refreshToken);
-}
-
-function setTokens(nextAccessToken: string | null, nextRefreshToken: string | null) {
-  accessToken = nextAccessToken;
-  refreshToken = nextRefreshToken;
-
-  if (accessToken) {
-    localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-  } else {
-    localStorage.removeItem(ACCESS_TOKEN_KEY);
-  }
-
-  if (refreshToken) {
-    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-  } else {
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    return false;
+  } catch (error) {
+    console.error('[API] Failed to refresh access token:', error);
+    inMemoryAccessToken = null;
+    return false;
   }
 }
 
-export function clearTokens() {
-  setTokens(null, null);
+/**
+ * ✅ SECURITY UPGRADE: Clear session (logout)
+ * Calls backend to revoke refresh token and clear cookies
+ */
+export async function clearTokens() {
+  console.log('[API] Clearing authentication session...');
+  inMemoryAccessToken = null;
+  
+  try {
+    await fetch(`${API_BASE_URL}/auth/logout`, {
+      method: 'POST',
+      credentials: 'include', // ✅ Send cookies to be cleared
+    });
+    console.log('[API] ✅ Session cleared successfully');
+  } catch (error) {
+    console.error('[API] Failed to clear session:', error);
+  }
 }
 
-export function hasValidAuth(): boolean {
-  // Reload from storage in case it was set in another tab/component
-  reloadTokensFromStorage();
-  return Boolean(accessToken);
+/**
+ * ✅ NEW: Check if user has valid authentication session
+ * Checks for HttpOnly cookie presence on backend
+ */
+export async function hasValidAuth(): Promise<boolean> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/check`, {
+      method: 'GET',
+      credentials: 'include', // ✅ Send cookies
+    });
+
+    if (!response.ok) {
+      return false;
+    }
+
+    const data = await response.json();
+    return data.authenticated === true;
+  } catch (error) {
+    console.error('[API] Failed to check auth status:', error);
+    return false;
+  }
 }
 
+/**
+ * ✅ DEPRECATED: Access token no longer needed in frontend
+ * Tokens are in HttpOnly cookies, automatically sent with requests
+ */
 export function getAccessToken(): string | null {
-  reloadTokensFromStorage();
-  return accessToken;
-}
-
-function reloadTokensFromStorage() {
-  const storedAccessToken = localStorage.getItem(ACCESS_TOKEN_KEY);
-  const storedRefreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
-  
-  if (storedAccessToken && storedAccessToken !== accessToken) {
-    console.log('[API] Reloading access token from localStorage');
-    accessToken = storedAccessToken;
-  }
-  
-  if (storedRefreshToken && storedRefreshToken !== refreshToken) {
-    console.log('[API] Reloading refresh token from localStorage');
-    refreshToken = storedRefreshToken;
-  }
+  console.warn('[API] getAccessToken() is deprecated - tokens are in HttpOnly cookies');
+  return inMemoryAccessToken;
 }
 
 async function request<T = unknown>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -90,37 +107,24 @@ async function request<T = unknown>(path: string, options: RequestOptions = {}):
     finalHeaders.set('Content-Type', 'application/json');
   }
 
-  // Ensure tokens are synced from localStorage before authenticated requests
-  if (authenticated && !accessToken) {
-    console.log('[API] No token in memory, reloading from localStorage...');
-    reloadTokensFromStorage();
-  }
-
-  if (authenticated && accessToken) {
-    const authHeader = `Bearer ${accessToken}`;
-    finalHeaders.set('Authorization', authHeader);
-  } else if (authenticated && !accessToken) {
-    console.error(`[API] ❌ CRITICAL: No access token available for authenticated request to ${path}`);
-    console.error('[API] localStorage has token:', !!localStorage.getItem(ACCESS_TOKEN_KEY));
-    console.error('[API] memory has token:', !!accessToken);
-    throw new Error('No authentication token available');
-  }
-
+  // ✅ SECURITY UPGRADE: Send HttpOnly cookies with every request
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...rest,
     headers: finalHeaders,
+    credentials: 'include', // ✅ CRITICAL: Send cookies (access token + refresh token)
   });
 
-  if (response.status === 401 && authenticated && refreshToken) {
-    console.log('[API] ⚠️ Got 401 Unauthorized, attempting token refresh...');
-    try {
-      await refreshAccessToken();
-      console.log('[API] ✓ Token refresh successful, retrying request to', path);
+  // Handle 401 Unauthorized - try silent token refresh
+  if (response.status === 401 && authenticated) {
+    console.log('[API] ⚠️ Got 401 Unauthorized, attempting silent token refresh...');
+    const refreshed = await refreshAccessToken();
+    
+    if (refreshed) {
+      console.log('[API] ✅ Token refreshed, retrying request to', path);
+      // Retry the original request with new tokens (in cookies)
       return request<T>(path, { ...options, authenticated });
-    } catch (error) {
-      console.error('[API] ❌ Token refresh failed, clearing tokens', error);
-      clearTokens();
-      // Don't throw - let the caller handle the auth failure
+    } else {
+      console.error('[API] ❌ Token refresh failed, session expired');
       throw new Error('Authentication session expired. Please reconnect your wallet.');
     }
   }
@@ -340,26 +344,50 @@ export interface BackendWheelSpin {
 // Global authentication state to prevent concurrent auth attempts
 let isAuthenticating = false;
 let authPromise: Promise<AuthResponse> | null = null;
+let lastAuthenticatedAddress: string | null = null;
 
-export async function authenticateWithWallet(provider: BrowserProvider): Promise<AuthResponse> {
+/**
+ * ✅ SECURITY UPGRADE: Authenticate with wallet using HttpOnly cookies
+ * Tokens are now stored in secure HttpOnly cookies, not localStorage!
+ */
+export async function authenticateWithWallet(provider: BrowserProvider, forceReauth: boolean = false): Promise<AuthResponse> {
   if (!provider) {
     throw new Error('Wallet provider not available');
   }
 
-  // If already authenticating, return the existing promise
-  if (isAuthenticating && authPromise) {
-    console.log('[API] Authentication already in progress, reusing promise');
+  const signer = await provider.getSigner();
+  const currentAddress = getAddress(await signer.getAddress());
+
+  // Check if already authenticated with valid session
+  if (!forceReauth && lastAuthenticatedAddress === currentAddress) {
+    const hasSession = await hasValidAuth();
+    if (hasSession) {
+      console.log('[API] ✅ Already authenticated with valid session');
+      // Return mock response - actual user data will be loaded separately
+      return {
+        accessToken: '', // Not needed - in HttpOnly cookie
+        refreshToken: '', // Not needed - in HttpOnly cookie
+        user: {} as BackendUser,
+      };
+    }
+  }
+
+  // If authenticating for same address, return existing promise
+  if (isAuthenticating && authPromise && lastAuthenticatedAddress === currentAddress) {
+    console.log('[API] ⏳ Authentication already in progress, reusing promise');
     return authPromise;
   }
 
   // Start new authentication
+  console.log('[API] 🚀 Starting authentication for:', currentAddress);
   isAuthenticating = true;
+  lastAuthenticatedAddress = currentAddress;
+  
   authPromise = (async () => {
     try {
-      // Clear any existing tokens before new authentication
-      clearTokens();
+      // Clear any existing session before new authentication
+      await clearTokens();
 
-      const signer = await provider.getSigner();
       const network = await provider.getNetwork();
       const expectedChainId = Number.parseInt(BNB_CHAIN_CONFIG.chainId, 16);
 
@@ -368,6 +396,7 @@ export async function authenticateWithWallet(provider: BrowserProvider): Promise
       }
 
       const walletAddress = getAddress(await signer.getAddress());
+      console.log('[API] 📝 Requesting nonce for:', walletAddress);
 
       // Get nonce
       const nonceResponse = await request<{ walletAddress: string; message: string }>(
@@ -379,20 +408,29 @@ export async function authenticateWithWallet(provider: BrowserProvider): Promise
         },
       );
 
-      // Single signature to sign the nonce message
+      console.log('[API] ✍️ Requesting signature from wallet...');
       const signature = await signer.signMessage(nonceResponse.message);
 
-      // Login with signature
-      const authResponse = await request<AuthResponse>('/auth/login', {
+      console.log('[API] 🔐 Signature obtained, logging in...');
+      // Login - backend sets HttpOnly cookies automatically
+      const loginResponse = await request<{ user: BackendUser; message: string }>('/auth/login', {
         method: 'POST',
         body: JSON.stringify({ walletAddress, signature }),
         authenticated: false,
       });
 
-      // Store tokens
-      setTokens(authResponse.accessToken, authResponse.refreshToken);
-
-      return authResponse;
+      console.log('[API] ✅ Login successful - tokens stored in secure HttpOnly cookies');
+      
+      // Return auth response (tokens are in cookies, not response body)
+      return {
+        accessToken: '', // Not needed
+        refreshToken: '', // Not needed
+        user: loginResponse.user,
+      };
+    } catch (error) {
+      console.error('[API] ❌ Authentication failed:', error);
+      lastAuthenticatedAddress = null; // Allow retry
+      throw error;
     } finally {
       // Reset authentication state
       isAuthenticating = false;
@@ -403,8 +441,52 @@ export async function authenticateWithWallet(provider: BrowserProvider): Promise
   return authPromise;
 }
 
+/**
+ * ✅ NEW: Silent token refresh on app load
+ * Restores authentication session from HttpOnly cookies
+ */
+export async function refreshAuthSession(): Promise<{ authenticated: boolean; user?: BackendUser }> {
+  try {
+    console.log('[API] 🔄 Attempting to restore session from cookies...');
+    
+    const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: 'POST',
+      headers: jsonHeaders,
+      credentials: 'include', // ✅ Send HttpOnly cookies
+    });
+
+    if (!response.ok) {
+      console.log('[API] No valid session found');
+      return { authenticated: false };
+    }
+
+    const data = await response.json();
+    
+    if (data.authenticated && data.user) {
+      console.log('[API] ✅ Session restored successfully');
+      return {
+        authenticated: true,
+        user: data.user,
+      };
+    }
+
+    return { authenticated: false };
+  } catch (error) {
+    console.error('[API] Failed to restore session:', error);
+    return { authenticated: false };
+  }
+}
+
 export function isCurrentlyAuthenticating(): boolean {
   return isAuthenticating;
+}
+
+export function clearAuthenticationCache() {
+  console.log('[API] Clearing authentication cache');
+  lastAuthenticatedAddress = null;
+  isAuthenticating = false;
+  authPromise = null;
+  inMemoryAccessToken = null;
 }
 
 export async function fetchProfile() {

@@ -110,14 +110,15 @@ async function bootstrap() {
 
   app.enableCors({
     origin,
-    credentials: true,
+    credentials: true, // ✅ CRITICAL: Allow cookies to be sent with requests
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token'],
-    exposedHeaders: ['X-CSRF-Token'],
+    exposedHeaders: ['X-CSRF-Token', 'Set-Cookie'], // Expose Set-Cookie header
     maxAge: 3600, // 1 hour
   });
 
   loggerService.log(`CORS enabled for origins: ${Array.isArray(origin) ? origin.join(', ') : origin}`, 'Bootstrap');
+  loggerService.log(`✅ CORS credentials enabled for HttpOnly cookie support`, 'Bootstrap');
 
   const prismaService = app.get(PrismaService);
   await prismaService.enableShutdownHooks(app);
