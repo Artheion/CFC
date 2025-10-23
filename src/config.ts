@@ -11,6 +11,13 @@ const DEFAULT_RPC_ENDPOINTS: Record<string, string> = {
 export const RPC_ENDPOINT =
   import.meta.env.VITE_RPC_ENDPOINT || DEFAULT_RPC_ENDPOINTS[BNB_NETWORK] || DEFAULT_RPC_ENDPOINTS.testnet;
 
+// Debug logging to verify correct RPC is being used
+console.log('[Config] RPC Configuration:', {
+  VITE_RPC_ENDPOINT: import.meta.env.VITE_RPC_ENDPOINT,
+  BNB_NETWORK,
+  finalRPC: RPC_ENDPOINT,
+});
+
 type EvmChainConfig = {
   chainId: `0x${string}`;
   chainName: string;

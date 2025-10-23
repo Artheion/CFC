@@ -12,8 +12,10 @@
     "migrate:dev": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
     "prisma:generate": "prisma generate",
-    "prisma:seed": "node prisma/seed.js",
     "test": "jest"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
   },
   "dependencies": {
     "@nestjs/cli": "^10.3.2",
