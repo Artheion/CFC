@@ -99,9 +99,6 @@ async function request<T = unknown>(path: string, options: RequestOptions = {}):
   if (authenticated && accessToken) {
     const authHeader = `Bearer ${accessToken}`;
     finalHeaders.set('Authorization', authHeader);
-    console.log(`[API] ✓ Request to ${path}`);
-    console.log(`[API] Token (first 30 chars): ${accessToken.substring(0, 30)}...`);
-    console.log(`[API] Authorization header set: Bearer ${accessToken.substring(0, 30)}...`);
   } else if (authenticated && !accessToken) {
     console.error(`[API] ❌ CRITICAL: No access token available for authenticated request to ${path}`);
     console.error('[API] localStorage has token:', !!localStorage.getItem(ACCESS_TOKEN_KEY));
@@ -347,7 +344,6 @@ export async function authenticateWithWallet(provider: BrowserProvider): Promise
 
   // Clear any existing tokens before new authentication
   // This prevents stale tokens from interfering with reconnection
-  console.log('[API] Clearing existing tokens before authentication');
   clearTokens();
 
   const signer = await provider.getSigner();
@@ -359,7 +355,7 @@ export async function authenticateWithWallet(provider: BrowserProvider): Promise
   }
 
   const walletAddress = getAddress(await signer.getAddress());
-  console.log('[API] Requesting nonce for wallet:', walletAddress);
+
   
   const nonceResponse = await request<{ walletAddress: string; message: string }>(
     '/auth/nonce',
@@ -370,25 +366,20 @@ export async function authenticateWithWallet(provider: BrowserProvider): Promise
     },
   );
 
-  console.log('[API] Signing message...');
+
   const signature = await signer.signMessage(nonceResponse.message);
 
-  console.log('[API] Logging in with signature...');
+
   const authResponse = await request<AuthResponse>('/auth/login', {
     method: 'POST',
     body: JSON.stringify({ walletAddress, signature }),
     authenticated: false,
   });
 
-  console.log('[API] ✅ Authentication successful!');
-  console.log('[API] Access token:', authResponse.accessToken ? authResponse.accessToken.substring(0, 30) + '...' : 'MISSING');
-  console.log('[API] Refresh token:', authResponse.refreshToken ? 'Present' : 'MISSING');
+
   
   setTokens(authResponse.accessToken, authResponse.refreshToken);
-  
-  console.log('[API] Tokens stored. Verifying localStorage...');
-  console.log('[API] localStorage accessToken:', localStorage.getItem(ACCESS_TOKEN_KEY) ? 'Saved ✓' : 'NOT SAVED ✗');
-  console.log('[API] localStorage refreshToken:', localStorage.getItem(REFRESH_TOKEN_KEY) ? 'Saved ✓' : 'NOT SAVED ✗');
+
 
   return authResponse;
 }
