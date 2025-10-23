@@ -23,6 +23,7 @@ export class QueueService implements OnModuleDestroy {
     const connectionOptions: any = {
       maxRetriesPerRequest: null,
       enableReadyCheck: false,
+      enableOfflineQueue: false,
     };
     
     // If URL uses SSL (rediss://), enable TLS
@@ -31,6 +32,8 @@ export class QueueService implements OnModuleDestroy {
         rejectUnauthorized: false, // Required for some cloud Redis providers
       };
       this.logger.log('[QueueService] TLS/SSL enabled for Redis connection');
+    } else {
+      this.logger.log('[QueueService] Using non-SSL Redis connection');
     }
     
     this.connection = new IORedis(redisUrl, connectionOptions);
