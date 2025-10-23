@@ -5,7 +5,7 @@ import { useGameStore } from '../store/gameStore';
 import { ADMIN_WALLET_ADDRESS } from '../config';
 import cfcLogo from '../assets/CFC-Logo.png';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { authenticateWithWallet } from '../utils/apiClient';
+import { authenticateWithWallet, isCurrentlyAuthenticating } from '../utils/apiClient';
 import { useWalletContext } from '../contexts/WalletContext';
 import { useTranslation } from 'react-i18next';
 import LanguageSwitcher from './LanguageSwitcher';
@@ -31,7 +31,7 @@ const Navbar = () => {
   const logout = useGameStore((state) => state.logout);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isBalanceLoading, setIsBalanceLoading] = useState(false);
-  const [authInProgress, setAuthInProgress] = useState(false);
+  const [lastAuthAttemptAddress, setLastAuthAttemptAddress] = useState<string | null>(null);
   
   const checksummedAdmin = useMemo(() => ADMIN_WALLET_ADDRESS?.toLowerCase(), []);
 
@@ -44,6 +44,7 @@ const Navbar = () => {
       if (user || isHydrated) {
         console.log('[Navbar] Wallet disconnected, clearing state');
         logout();
+        setLastAuthAttemptAddress(null);
       }
       return;
     }
@@ -59,14 +60,21 @@ const Navbar = () => {
         return;
       }
 
-      // Prevent concurrent authentication attempts
-      if (authInProgress) {
+      // Prevent duplicate authentication attempts for the same address
+      if (lastAuthAttemptAddress === address) {
+        console.log('[Navbar] Already attempted auth for this address, skipping');
+        return;
+      }
+
+      // Check if authentication is already in progress globally
+      if (isCurrentlyAuthenticating()) {
+        console.log('[Navbar] Authentication already in progress globally, skipping');
         return;
       }
 
       let cancelled = false;
       console.log('[Navbar] 🚀 Authenticating wallet:', address);
-      setAuthInProgress(true);
+      setLastAuthAttemptAddress(address);
 
       const run = async () => {
         try {
@@ -95,16 +103,15 @@ const Navbar = () => {
         } catch (error) {
           console.error('[Navbar] Failed to authenticate with backend:', error);
           
-          // Don't logout on authentication failure during reconnect
-          // Just log the error and let user retry
+          // Reset so user can try again
           if (!cancelled) {
+            setLastAuthAttemptAddress(null);
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             console.warn('[Navbar] Authentication failed, user can retry. Error:', errorMessage);
           }
         } finally {
           if (!cancelled) {
             setLoading(false);
-            setAuthInProgress(false);
           }
         }
       };
@@ -113,7 +120,6 @@ const Navbar = () => {
 
       return () => {
         cancelled = true;
-        setAuthInProgress(false);
       };
     }
 

@@ -337,51 +337,74 @@ export interface BackendWheelSpin {
   createdAt: string;
 }
 
+// Global authentication state to prevent concurrent auth attempts
+let isAuthenticating = false;
+let authPromise: Promise<AuthResponse> | null = null;
+
 export async function authenticateWithWallet(provider: BrowserProvider): Promise<AuthResponse> {
   if (!provider) {
     throw new Error('Wallet provider not available');
   }
 
-  // Clear any existing tokens before new authentication
-  // This prevents stale tokens from interfering with reconnection
-  clearTokens();
-
-  const signer = await provider.getSigner();
-  const network = await provider.getNetwork();
-  const expectedChainId = Number.parseInt(BNB_CHAIN_CONFIG.chainId, 16);
-
-  if (Number(network.chainId) !== expectedChainId) {
-    throw new Error('Please switch your wallet to the BNB Chain network before authenticating.');
+  // If already authenticating, return the existing promise
+  if (isAuthenticating && authPromise) {
+    console.log('[API] Authentication already in progress, reusing promise');
+    return authPromise;
   }
 
-  const walletAddress = getAddress(await signer.getAddress());
+  // Start new authentication
+  isAuthenticating = true;
+  authPromise = (async () => {
+    try {
+      // Clear any existing tokens before new authentication
+      clearTokens();
 
-  
-  const nonceResponse = await request<{ walletAddress: string; message: string }>(
-    '/auth/nonce',
-    {
-      method: 'POST',
-      body: JSON.stringify({ walletAddress }),
-      authenticated: false,
-    },
-  );
+      const signer = await provider.getSigner();
+      const network = await provider.getNetwork();
+      const expectedChainId = Number.parseInt(BNB_CHAIN_CONFIG.chainId, 16);
 
+      if (Number(network.chainId) !== expectedChainId) {
+        throw new Error('Please switch your wallet to the BNB Chain network before authenticating.');
+      }
 
-  const signature = await signer.signMessage(nonceResponse.message);
+      const walletAddress = getAddress(await signer.getAddress());
 
+      // Get nonce
+      const nonceResponse = await request<{ walletAddress: string; message: string }>(
+        '/auth/nonce',
+        {
+          method: 'POST',
+          body: JSON.stringify({ walletAddress }),
+          authenticated: false,
+        },
+      );
 
-  const authResponse = await request<AuthResponse>('/auth/login', {
-    method: 'POST',
-    body: JSON.stringify({ walletAddress, signature }),
-    authenticated: false,
-  });
+      // Single signature to sign the nonce message
+      const signature = await signer.signMessage(nonceResponse.message);
 
+      // Login with signature
+      const authResponse = await request<AuthResponse>('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ walletAddress, signature }),
+        authenticated: false,
+      });
 
-  
-  setTokens(authResponse.accessToken, authResponse.refreshToken);
+      // Store tokens
+      setTokens(authResponse.accessToken, authResponse.refreshToken);
 
+      return authResponse;
+    } finally {
+      // Reset authentication state
+      isAuthenticating = false;
+      authPromise = null;
+    }
+  })();
 
-  return authResponse;
+  return authPromise;
+}
+
+export function isCurrentlyAuthenticating(): boolean {
+  return isAuthenticating;
 }
 
 export async function fetchProfile() {

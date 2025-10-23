@@ -77,35 +77,39 @@ const Onboarding = () => {
   // Monitor authentication readiness
   useEffect(() => {
     const hasAccessToken = localStorage.getItem('cfc.accessToken');
+    const hasRefreshToken = localStorage.getItem('cfc.refreshToken');
     
-    if (hasAccessToken && user) {
-      if (!isAuthReady) {
-        setIsAuthReady(true);
-      }
-    } else {
-      if (isAuthReady) {
-        setIsAuthReady(false);
-      }
+    // Only consider auth ready if we have both tokens AND user data
+    const shouldBeReady = Boolean(hasAccessToken && hasRefreshToken && user && user.walletAddress === address);
+    
+    if (shouldBeReady !== isAuthReady) {
+      setIsAuthReady(shouldBeReady);
     }
-  }, [user, isAuthReady]);
+  }, [user, address, isAuthReady]);
 
   useEffect(() => {
-    if (!address) return;
+    if (!address || !isCorrectNetwork) {
+      if (showOnboarding) {
+        setShowOnboarding(false);
+      }
+      return;
+    }
     
     // Check if user has completed onboarding in the database (source of truth)
     const hasCompletedOnboarding = Boolean(user?.hasCompletedOnboarding);
     
     // Show onboarding if:
     // 1. User hasn't completed onboarding in the database
-    // 2. User is connected
+    // 2. User is connected and on correct network
     // 3. User has data loaded (has user account)
-    // 4. Authentication is complete (has access token)
-    // 5. On correct network
-    if (!hasCompletedOnboarding && address && user && isCorrectNetwork && isAuthReady) {
+    // 4. Authentication is complete (has tokens)
+    // 5. User address matches current wallet
+    const shouldShow = !hasCompletedOnboarding && address && user && isCorrectNetwork && isAuthReady && user.walletAddress === address;
+    
+    if (shouldShow && !showOnboarding) {
       setCurrentStep(0);
       setShowOnboarding(true);
-    } else if (hasCompletedOnboarding && showOnboarding) {
-      // Hide onboarding if it was already completed
+    } else if (!shouldShow && showOnboarding) {
       setShowOnboarding(false);
     }
   }, [address, user, isCorrectNetwork, isAuthReady, showOnboarding]);
