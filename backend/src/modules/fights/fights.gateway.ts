@@ -25,9 +25,10 @@ import { JwtService } from '@nestjs/jwt';
 @WebSocketGateway({
   cors: {
     origin: (origin, callback) => {
-      // Allow all origins in development, specific origins in production
-      const allowedOrigins = process.env.FRONTEND_URL 
-        ? process.env.FRONTEND_URL.split(',').map(o => o.trim())
+      // Use FRONTEND_URL if set, otherwise fall back to CORS_ORIGIN
+      const corsConfig = process.env.FRONTEND_URL || process.env.CORS_ORIGIN;
+      const allowedOrigins = corsConfig
+        ? corsConfig.split(',').map(o => o.trim())
         : ['http://localhost:3000', 'http://localhost:5173'];
       
       // In development, allow all origins
@@ -58,7 +59,8 @@ export class FightsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
 
   afterInit(server: Server) {
     this.logger.log('✅ WebSocket Gateway initialized for real-time fights');
-    this.logger.log(`🌐 CORS configured for: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`);
+    const corsConfig = process.env.FRONTEND_URL || process.env.CORS_ORIGIN || 'http://localhost:3000';
+    this.logger.log(`🌐 CORS configured for: ${corsConfig}`);
     this.logger.log(`🔊 Listening on namespace: /fights`);
   }
 
