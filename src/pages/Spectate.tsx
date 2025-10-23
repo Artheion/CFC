@@ -31,17 +31,12 @@ const Spectate = () => {
   // ✅ REAL-TIME: Connect to WebSocket for synchronized fight updates
   const { isConnected, fightStarting, roundStart, roundComplete, fightFinished, error: wsError } = useFightWebSocket(fightId);
   
-  // 🐛 DEBUG: Show WebSocket connection status
+  // WebSocket error handling
   useEffect(() => {
-    console.log('[Spectate] WebSocket connection status:', { 
-      isConnected, 
-      hasStartingEvent: !!fightStarting,
-      hasRoundStart: !!roundStart,
-      hasRoundComplete: !!roundComplete,
-      hasFinished: !!fightFinished,
-      error: wsError,
-    });
-  }, [isConnected, fightStarting, roundStart, roundComplete, fightFinished, wsError]);
+    if (wsError) {
+      console.error('[Spectate] WebSocket error:', wsError);
+    }
+  }, [wsError]);
   
   const [selectedWinner, setSelectedWinner] = useState<string>('');
   const [betAmount, setBetAmount] = useState('');

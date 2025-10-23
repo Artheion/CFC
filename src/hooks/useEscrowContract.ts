@@ -53,16 +53,6 @@ export const useEscrowContract = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  console.log('[useEscrowContract] Hook initialized with:', {
-    hasProvider: !!walletProvider,
-    providerType: walletProvider?.constructor?.name,
-    address,
-    escrowConfigured: Boolean(ESCROW_CONTRACT_ADDRESS && CFC_TOKEN_ADDRESS),
-    rpcEndpoint: RPC_ENDPOINT,
-    tokenAddress: CFC_TOKEN_ADDRESS,
-    escrowAddress: ESCROW_CONTRACT_ADDRESS,
-  });
-
   const clearError = useCallback(() => setError(null), []);
 
   // Convert UUID to bytes32 format for contract
