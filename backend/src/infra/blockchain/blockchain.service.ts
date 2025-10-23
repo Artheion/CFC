@@ -13,8 +13,8 @@ export class BlockchainService {
   }
 
   private initialize() {
-    const rpcUrl = this.configService.get<string>('BSC_RPC_URL');
-    const privateKey = this.configService.get<string>('TREASURY_PRIVATE_KEY');
+    const rpcUrl = this.configService.get<string>('app.bnbRpcEndpoint');
+    const privateKey = this.configService.get<string>('app.treasuryPrivateKey');
 
     if (!rpcUrl) {
       this.logger.warn('BSC_RPC_URL not configured - blockchain features disabled');
