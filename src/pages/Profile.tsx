@@ -598,9 +598,53 @@ const Profile = () => {
     referralEntry?.code || `CFC-${user.walletAddress.slice(0, 6).toUpperCase()}-${user.walletAddress.slice(-3).toUpperCase()}`;
 
   const userCockIds = userCocks.map((c) => c.id);
-  const userFights = activeFights.filter(
-    (fight) => userCockIds.includes(fight.cock1Id) || userCockIds.includes(fight.cock2Id)
-  );
+  
+  // ✅ FIX: Fetch user-specific fight history instead of relying on activeFights
+  const [userFightHistory, setUserFightHistory] = useState<ActiveFight[]>([]);
+  const lastHistoryFetchRef = useRef<number>(0);
+  const HISTORY_CACHE_DURATION = 30000; // 30 seconds
+  
+  useEffect(() => {
+    const fetchUserHistory = async () => {
+      if (!user || !BACKEND_ENABLED) return;
+      
+      const now = Date.now();
+      if (now - lastHistoryFetchRef.current < HISTORY_CACHE_DURATION) {
+        return;
+      }
+      
+      try {
+        // ✅ Use existing /fights/history endpoint (returns user-specific fights)
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/fights/history?limit=50`, {
+          credentials: 'include',
+        });
+        
+        if (!response.ok) return;
+        
+        const data = await response.json();
+        const { mapFightHistory } = await import('../utils/backendMappers');
+        const mappedHistory = mapFightHistory(data);
+        
+        lastHistoryFetchRef.current = now;
+        setUserFightHistory(mappedHistory);
+      } catch (error) {
+        console.error('[Profile] Failed to fetch user fight history:', error);
+      }
+    };
+    
+    fetchUserHistory();
+  }, [user, HISTORY_CACHE_DURATION]);
+  
+  // Combine activeFights (current) with userFightHistory (past)
+  const userFights = useMemo(() => {
+    const allFights = [...activeFights, ...userFightHistory];
+    const uniqueFights = allFights.filter(
+      (fight, index, self) => index === self.findIndex((f) => f.id === fight.id)
+    );
+    return uniqueFights.filter(
+      (fight) => userCockIds.includes(fight.cock1Id) || userCockIds.includes(fight.cock2Id)
+    );
+  }, [activeFights, userFightHistory, userCockIds]);
 
   const wagerHistory = userFights
     .filter((fight) => fight.status === 'finished')
@@ -613,7 +657,8 @@ const Profile = () => {
 
       return {
         cockName: userCock?.name || 'Unknown',
-        wager: isWinner ? wagerAmount * 2 : -wagerAmount,
+        // ✅ FIX: Show net profit/loss (won opponent's wager or lost your wager)
+        wager: isWinner ? wagerAmount : -wagerAmount,
         outcome: isWinner ? 'Win' : 'Loss',
         date: fight.createdAt ? new Date(fight.createdAt).toLocaleDateString() : 'Unknown',
       };

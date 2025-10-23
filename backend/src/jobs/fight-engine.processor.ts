@@ -146,15 +146,16 @@ export class FightEngineProcessor implements OnModuleInit, OnModuleDestroy {
     await this.prisma.$transaction(async (tx) => {
       // Calculate winner earnings (wager from fight)
       const wagerAmount = parseFloat(fight.wager.toString());
-      // Winner gets the total pot (both players' wagers)
-      const totalPot = wagerAmount * 2;
+      // ✅ FIX: Winner earns opponent's wager (net profit), not total pot
+      // Winner gets their wager back + opponent's wager = net profit is just opponent's wager
+      const netWinnings = wagerAmount; // Just the opponent's wager (net profit)
       
       // Update winner stats
       await tx.cock.update({
         where: { id: simulation.winnerCockId },
         data: {
           wins: { increment: 1 },
-          earningsCfc: { increment: totalPot },
+          earningsCfc: { increment: netWinnings },
           energy: Math.max(
             0,
             Math.min(

@@ -704,7 +704,8 @@ const Spectate = () => {
                   {/* Predictions List */}
                   {fight.spectatorBets.length > 0 ? (
                     fight.spectatorBets.map((bet, index) => {
-                      const bettedCock = cocks.find(c => c.id === bet.cockId);
+                      // ✅ FIX: Use cocks from the fight (cock1/cock2), not from user's cocks array
+                      const bettedCock = bet.cockId === cock1?.id ? cock1 : bet.cockId === cock2?.id ? cock2 : null;
                       const displayName = bet.username || formatWalletAddress(bet.userId);
                       const avatarInitials = bet.username 
                         ? bet.username.substring(0, 2).toUpperCase()
@@ -720,9 +721,10 @@ const Spectate = () => {
                           <div className={`text-center font-bold ${
                             bettedCock?.rarity === 'legendary' ? 'text-rarity-legendary' :
                             bettedCock?.rarity === 'epic' ? 'text-rarity-epic' :
-                            'text-rarity-rare'
+                            bettedCock?.rarity === 'rare' ? 'text-rarity-rare' :
+                            'text-white'
                           }`}>
-                            {bettedCock?.name}
+                            {bettedCock?.name || 'Unknown'}
                           </div>
                           <div className="text-right font-bold text-white">{formatCFC(bet.amount)} $CFC</div>
                         </div>
