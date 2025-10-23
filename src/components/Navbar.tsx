@@ -94,8 +94,16 @@ const Navbar = () => {
             const mappedUser = mapUser(authResult.user);
             setUser(mappedUser);
             
-            // Wait a brief moment to ensure tokens are fully written to localStorage
-            await new Promise(resolve => setTimeout(resolve, 100));
+            // Wait longer to ensure tokens are fully written to localStorage
+            // This prevents race condition where refreshBackendState runs before token is available
+            await new Promise(resolve => setTimeout(resolve, 300));
+          }
+          
+          // Additional check: verify token exists before calling refreshBackendState
+          const hasToken = localStorage.getItem('access_token') || localStorage.getItem('accessToken');
+          if (!hasToken) {
+            console.error('[Navbar] Token not found after authentication, retrying...');
+            await new Promise(resolve => setTimeout(resolve, 200));
           }
           
           await refreshBackendState();
