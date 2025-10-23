@@ -153,11 +153,12 @@ export class UsersService {
     }
 
     // ========== SECURITY CHECK 2: Find Unclaimed Matches ==========
-    // Get all completed fights where user participated or bet
+    // Get all completed/cancelled fights where user participated or bet
+    // ✅ FIX: Include CANCELLED fights so users can claim refunds
     const userCockIds = user.cocks.map((c: any) => c.id);
     const completedFights = await this.prisma.fight.findMany({
       where: {
-        status: 'FINISHED',
+        status: { in: ['FINISHED', 'CANCELLED'] }, // Include cancelled fights for refunds
         OR: [
           { cock1Id: { in: userCockIds } },
           { cock2Id: { in: userCockIds } },

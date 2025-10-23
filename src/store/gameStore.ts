@@ -430,12 +430,13 @@ export const useGameStore = create<GameStore>()(
           return;
         }
 
-        // Add caching to prevent excessive calls to refreshBackendState
+        // ✅ PERFORMANCE: Cache API calls to prevent excessive refreshes
         const now = Date.now();
-        const REFRESH_CACHE_DURATION = 5000; // 5 seconds - short because this is core data
+        const REFRESH_CACHE_DURATION = 30000; // 30 seconds (increased from 5s for better performance)
         const lastRefresh = state.lastFetchTimestamps.coreRefresh || 0;
         
         if (now - lastRefresh < REFRESH_CACHE_DURATION) {
+          console.log('[Store] Skipping refresh - cached data is fresh');
           return; // Skip if refreshed recently
         }
 
@@ -447,26 +448,24 @@ export const useGameStore = create<GameStore>()(
             throw new Error('Unable to load profile from backend');
           }
 
-          // Fetch only critical user data (cocks, chickens, eggs, inventory)
-          // Skip secondary data unless absolutely necessary
+          // ✅ PERFORMANCE: Fetch core data in parallel (fastest approach)
           const [
             cocks,
             chickens,
             eggs,
             inventory,
+            referral,
+            breedingSessions,
+            adminReferrals,
           ] = await Promise.all([
             fetchCocks(),
             fetchChickens(),
             fetchEggs(),
             fetchInventory(),
+            fetchReferrals().catch(() => null),
+            listActiveBreedingSessions().catch(() => []),
+            profile.isAdmin ? fetchAdminReferralCodes().catch(() => []) : Promise.resolve([]),
           ]);
-
-          // Fetch other data separately to reduce initial load
-          const referral = await fetchReferrals().catch(() => null);
-          const breedingSessions = await listActiveBreedingSessions().catch(() => []);
-
-          // Only fetch admin data if user is admin
-          const adminReferrals = profile.isAdmin ? await fetchAdminReferralCodes().catch(() => []) : [];
 
           // Fights and leaderboard are loaded on-demand in their respective pages
           // Don't fetch them here to reduce API calls
@@ -1558,6 +1557,12 @@ export const useGameStore = create<GameStore>()(
         // Only refresh fight queue
         const fights = await fetchFightQueue();
         set({ fightQueue: mapFightQueue(fights) });
+        
+        // ✅ FIX: Refresh claimable CFC after canceling (refund is now available)
+        if (typeof (window as any).refreshClaimableCfc === 'function') {
+          console.log('[Store] Triggering claimable CFC refresh after fight cancellation');
+          (window as any).refreshClaimableCfc();
+        }
       } catch (error) {
         console.error('Failed to cancel fight via backend', error);
       }

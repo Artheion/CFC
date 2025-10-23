@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import HolographicCard from '../components/ui/HolographicCard';
 import { useGameStore, BACKEND_ENABLED } from '../store/gameStore';
@@ -35,6 +35,13 @@ const Profile = () => {
   const [medkitPrice, setMedkitPrice] = useState('1000');
   const [loadingPrices, setLoadingPrices] = useState(false);
   const [savingPrices, setSavingPrices] = useState(false);
+  
+  // ✅ PERFORMANCE: Add caching to prevent excessive API calls
+  const lastAdminDataFetchRef = useRef<{ timestamp: number; tab: string }>({ timestamp: 0, tab: '' });
+  const lastEarningsFetchRef = useRef<number>(0);
+  const ADMIN_DATA_CACHE_DURATION = 60000; // 60 seconds
+  const EARNINGS_CACHE_DURATION = 30000; // 30 seconds
+  
   const normalizedAdmin = useMemo(() => ADMIN_WALLET_ADDRESS?.toLowerCase(), []);
   const truncatedAddress = useMemo(() => (
     address ? `${address.slice(0, 4)}...${address.slice(-4)}` : null
@@ -239,6 +246,16 @@ const Profile = () => {
   useEffect(() => {
     if (isAdmin && activeTab === 'admin') {
       const loadAdminData = async () => {
+        // ✅ PERFORMANCE: Skip if fetched recently for this tab
+        const now = Date.now();
+        if (
+          now - lastAdminDataFetchRef.current.timestamp < ADMIN_DATA_CACHE_DURATION &&
+          lastAdminDataFetchRef.current.tab === adminTab
+        ) {
+          console.log('[Profile] Skipping admin data fetch - cached data is fresh');
+          return;
+        }
+        
         setLoadingPrices(true);
         try {
           const { getPricesRequest, fetchAllCocksAdmin } = await import('../utils/apiClient');
@@ -248,6 +265,9 @@ const Profile = () => {
             getPricesRequest(),
             fetchAllCocksAdmin()
           ]);
+          
+          lastAdminDataFetchRef.current.timestamp = now;
+          lastAdminDataFetchRef.current.tab = adminTab;
           
           setRouletteCost(prices.rouletteCost.toString());
           setCapsulePrice(prices.capsulePrice.toString());
@@ -264,7 +284,7 @@ const Profile = () => {
       };
       void loadAdminData();
     }
-  }, [isAdmin, activeTab]);
+  }, [isAdmin, activeTab, adminTab, ADMIN_DATA_CACHE_DURATION]);
 
   // Fetch referral earnings - MUST be before early return
   const [referralEarnings, setReferralEarnings] = useState<number>(0);
@@ -281,12 +301,24 @@ const Profile = () => {
   const [isClaimingCfc, setIsClaimingCfc] = useState(false);
   const [cfcClaimError, setCfcClaimError] = useState<string | null>(null);
   const [cfcClaimSuccess, setCfcClaimSuccess] = useState<string | null>(null);
+  const lastClaimableFetchRef = useRef<number>(0);
+  const CLAIMABLE_CFC_CACHE_DURATION = 15000; // 15 seconds (short because it updates frequently)
   
   useEffect(() => {
     const fetchEarnings = async () => {
+      // ✅ PERFORMANCE: Skip if fetched recently
+      const now = Date.now();
+      if (now - lastEarningsFetchRef.current < EARNINGS_CACHE_DURATION) {
+        console.log('[Profile] Skipping earnings fetch - cached data is fresh');
+        return;
+      }
+      
       try {
         const { fetchReferralInfo } = await import('../utils/apiClient');
         const info = await fetchReferralInfo();
+        
+        lastEarningsFetchRef.current = now;
+        
         setReferralEarnings(safeParseAmount(info.ownReferralEarnings ?? info.totalEarnings));
         setTotalEarned(safeParseAmount(info.totalEarnedFromReferrals ?? info.totalEarnings));
         setLastWithdrawalAt(info.lastWithdrawalAt || null);
@@ -297,10 +329,10 @@ const Profile = () => {
     
     if (user && BACKEND_ENABLED) {
       void fetchEarnings();
-      // Refresh backend state to ensure fight history is loaded with full cock data
+      // ✅ PERFORMANCE: refreshBackendState already has 30s caching
       void refreshBackendState();
     }
-  }, [user, refreshBackendState]);
+  }, [user, refreshBackendState, EARNINGS_CACHE_DURATION]);
 
   const handleWithdraw = async () => {
     setWithdrawError(null);
@@ -364,46 +396,58 @@ const Profile = () => {
     }
   };
 
-  // Fetch claimable CFC amount
-  useEffect(() => {
-    const fetchClaimableCfc = async () => {
-      if (!user || !BACKEND_ENABLED) return;
+  // Fetch claimable CFC amount (includes refunds from cancelled fights)
+  const fetchClaimableCfc = useRef(async () => {
+    if (!user || !BACKEND_ENABLED) return;
+    
+    // ✅ PERFORMANCE: Skip if fetched recently
+    const now = Date.now();
+    if (now - lastClaimableFetchRef.current < CLAIMABLE_CFC_CACHE_DURATION) {
+      console.log('[Profile] Skipping claimable CFC fetch - cached data is fresh');
+      return;
+    }
 
-      try {
-        const accessToken = localStorage.getItem('cfc.accessToken');
-        if (!accessToken) {
-          // No token, don't spam the backend
-          return;
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/users/claimable-cfc`, {
+        credentials: 'include', // ✅ SECURITY: Use HttpOnly cookies
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          console.log('[Profile] Not authenticated for claimable CFC');
         }
-
-        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/users/claimable-cfc`, {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        });
-
-        if (!response.ok) {
-          // Silently fail on auth errors to avoid spam
-          if (response.status === 401) {
-
-          }
-          return;
-        }
-
-        const data = await response.json();
-        setClaimableCfc(data.claimableAmount || 0);
-        setClaimableMatchIds(data.matchIds || []);
-      } catch (error) {
-        // Silently fail - don't spam console
-
+        return;
       }
-    };
 
+      const data = await response.json();
+      lastClaimableFetchRef.current = now;
+      setClaimableCfc(data.claimableAmount || 0);
+      setClaimableMatchIds(data.matchIds || []);
+      console.log('[Profile] Claimable CFC updated:', data.claimableAmount);
+    } catch (error) {
+      console.error('[Profile] Failed to fetch claimable CFC:', error);
+    }
+  });
+
+  useEffect(() => {
     // Only fetch if user is properly authenticated
     if (user && address) {
-      fetchClaimableCfc();
+      fetchClaimableCfc.current();
     }
   }, [user, address]);
+  
+  // Export function to allow manual refresh (e.g., after canceling a fight)
+  useEffect(() => {
+    // Expose refresh function globally for Arena page
+    (window as any).refreshClaimableCfc = () => {
+      lastClaimableFetchRef.current = 0; // Force refresh
+      fetchClaimableCfc.current();
+    };
+    
+    return () => {
+      delete (window as any).refreshClaimableCfc;
+    };
+  }, []);
 
   // Handle CFC claim (user calls contract directly)
   const handleCfcClaim = async () => {
@@ -470,22 +514,25 @@ const Profile = () => {
       const receipt = await tx.wait();
       
       // Notify backend that claim succeeded
-      const accessToken = localStorage.getItem('cfc.accessToken');
-      if (accessToken) {
-        await fetch(`${import.meta.env.VITE_API_BASE_URL}/users/mark-claimed-cfc`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify({
-            matchIds: claimableMatchIds,
-            transactionHash: receipt.hash,
-          }),
-        });
-      }
+      await fetch(`${import.meta.env.VITE_API_BASE_URL}/users/mark-claimed-cfc`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include', // ✅ SECURITY: Use HttpOnly cookies
+        body: JSON.stringify({
+          matchIds: claimableMatchIds,
+          transactionHash: receipt.hash,
+        }),
+      });
 
       setCfcClaimSuccess(`Successfully claimed ${claimableCfc.toFixed(2)} $CFC! TX: ${receipt.hash.slice(0, 10)}...`);
+      
+      // ✅ Refresh claimable CFC after successful claim
+      lastClaimableFetchRef.current = 0; // Force refresh
+      await fetchClaimableCfc.current();
+      
+      // Legacy state update (may not be needed after refresh, but kept for safety)
       setClaimableCfc(0);
       setClaimableMatchIds([]);
       

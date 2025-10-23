@@ -25,11 +25,9 @@ export class CocksService {
     });
 
     console.log('[CocksService] Found', cocks.length, 'cocks for user:', userId);
-    if (cocks.length > 0) {
-      console.log('[CocksService] First cock:', JSON.stringify(cocks[0], null, 2));
-    }
 
-    const recoveredCocks = await Promise.all(cocks.map((cock) => this.applyPassiveRecoveryIfNeeded(cock.id, cock)));
+    // ✅ PERFORMANCE: Batch recovery updates instead of individual updates
+    const recoveredCocks = await this.batchApplyPassiveRecovery(cocks);
     
     return recoveredCocks.map(cock => ({
       ...cock,
@@ -50,7 +48,8 @@ export class CocksService {
       },
     });
 
-    const recoveredCocks = await Promise.all(cocks.map((cock) => this.applyPassiveRecoveryIfNeeded(cock.id, cock)));
+    // ✅ PERFORMANCE: Batch recovery updates
+    const recoveredCocks = await this.batchApplyPassiveRecovery(cocks);
     
     return recoveredCocks.map(cock => ({
       ...cock,
@@ -179,6 +178,76 @@ export class CocksService {
     }
 
     return cock;
+  }
+
+  /**
+   * ✅ PERFORMANCE OPTIMIZATION: Batch apply passive recovery to multiple cocks
+   * Instead of updating each cock individually (N+1 problem), batch them together
+   * Old: 1 SELECT + N UPDATEs = N+1 queries
+   * New: 1 SELECT + 1 batch UPDATE = 2 queries (or just return if no updates needed)
+   */
+  private async batchApplyPassiveRecovery(cocks: any[]): Promise<any[]> {
+    if (cocks.length === 0) return [];
+
+    const now = new Date();
+    const cocksNeedingUpdate: string[] = [];
+    const recoveryMap = new Map<string, ReturnType<typeof computePassiveRecovery>>();
+
+    // First pass: Compute recovery for all cocks
+    for (const cock of cocks) {
+      const recovery = computePassiveRecovery(cock, now);
+      recoveryMap.set(cock.id, recovery);
+      
+      if (recovery.needsUpdate) {
+        cocksNeedingUpdate.push(cock.id);
+      }
+    }
+
+    // If no updates needed, return original cocks
+    if (cocksNeedingUpdate.length === 0) {
+      return cocks;
+    }
+
+    // Batch update all cocks that need recovery
+    await Promise.all(
+      cocksNeedingUpdate.map((cockId) => {
+        const recovery = recoveryMap.get(cockId)!;
+        return this.prisma.cock.update({
+          where: { id: cockId },
+          data: {
+            health: recovery.nextHealth,
+            energy: recovery.nextEnergy,
+            lastRecoveryAt: now,
+            healthUpdatedAt: now,
+            energyUpdatedAt: now,
+          },
+        });
+      })
+    );
+
+    // Fetch updated cocks with owner data
+    const updatedCocks = await this.prisma.cock.findMany({
+      where: { id: { in: cocksNeedingUpdate } },
+      include: {
+        owner: {
+          select: {
+            walletAddress: true,
+            username: true,
+          },
+        },
+      },
+    });
+
+    // Create a map of updated cocks
+    const updatedCocksMap = new Map(updatedCocks.map(c => [c.id, c]));
+
+    // Return cocks with updated data where applicable
+    return cocks.map(cock => {
+      if (cocksNeedingUpdate.includes(cock.id)) {
+        return updatedCocksMap.get(cock.id) || cock;
+      }
+      return cock;
+    });
   }
 
   private async applyPassiveRecoveryIfNeeded(cockId: string, cock: CockModel, force = false) {

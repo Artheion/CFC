@@ -76,7 +76,7 @@ const Navbar = () => {
           console.log('[Navbar] ✅ User set from auth result');
         }
         
-        // Refresh all game state from backend
+        // ✅ PERFORMANCE: Only refresh if not recently refreshed (cache handles this)
         await refreshBackendState();
         console.log('[Navbar] ✅ Authentication and state refresh complete');
       } catch (error) {

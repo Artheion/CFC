@@ -179,18 +179,31 @@ const Shop = () => {
   const [hasFreeSpin, setHasFreeSpin] = useState<boolean>(false);
   const [discountPercent, setDiscountPercent] = useState<number>(0);
   
+  // ✅ PERFORMANCE: Add caching to prevent excessive API calls
+  const lastPricesFetchRef = useRef<number>(0);
+  const PRICES_CACHE_DURATION = 60000; // 60 seconds
+
   useEffect(() => {
     if (BACKEND_ENABLED) {
-      void loadShopData();
+      void loadShopData(); // Already has 60s caching
       
       // Fetch roulette cost and user's referral info from backend
       const fetchPrices = async () => {
+        // ✅ PERFORMANCE: Skip if fetched recently
+        const now = Date.now();
+        if (now - lastPricesFetchRef.current < PRICES_CACHE_DURATION) {
+          console.log('[Shop] Skipping prices fetch - cached data is fresh');
+          return;
+        }
+        
         try {
           const { getPricesRequest, fetchReferralInfo } = await import('../utils/apiClient');
           const [prices, referralInfo] = await Promise.all([
             getPricesRequest(),
             fetchReferralInfo()
           ]);
+          
+          lastPricesFetchRef.current = now;
           
           let finalCost = prices.rouletteCost;
 
@@ -209,7 +222,8 @@ const Shop = () => {
       
       // Listen for price updates from admin panel
       const handlePriceUpdate = () => {
-
+        // Force refresh by resetting cache timestamp
+        lastPricesFetchRef.current = 0;
         void fetchPrices();
         void loadShopData();
       };
