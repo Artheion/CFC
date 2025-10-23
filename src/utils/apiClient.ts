@@ -691,6 +691,14 @@ export async function listActiveBreedingSessions() {
   return request<BackendBreedingSession[]>(`/breeding/active`);
 }
 
+/**
+ * ✅ DEPRECATED: Tokens are now in HttpOnly cookies, not accessible from JavaScript
+ * This function is kept for backward compatibility but returns empty values
+ */
 export function getStoredTokens() {
-  return { accessToken, refreshToken };
+  console.warn('[API] getStoredTokens() is deprecated - tokens are in HttpOnly cookies');
+  return { 
+    accessToken: inMemoryAccessToken || '', 
+    refreshToken: '' // Not accessible - in HttpOnly cookie
+  };
 }
