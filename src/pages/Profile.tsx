@@ -4,7 +4,7 @@ import HolographicCard from '../components/ui/HolographicCard';
 import { useGameStore, BACKEND_ENABLED } from '../store/gameStore';
 import { ADMIN_WALLET_ADDRESS } from '../config';
 import { getCockImage } from '../utils/cockImages';
-import { Cock, ReferralCode } from '../types';
+import { Cock, ReferralCode, ActiveFight } from '../types';
 import { getCockHolographicConfig } from '../utils/cockHoloStyles';
 import { useWalletContext } from '../contexts/WalletContext';
 import NetworkMismatchNotice from '../components/NetworkMismatchNotice';
