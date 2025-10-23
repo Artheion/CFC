@@ -183,6 +183,14 @@ export const useEscrowContract = () => {
       console.log(`Escrow contract: ${ESCROW_CONTRACT_ADDRESS}`);
       console.log(`Amount: ${amountWei.toString()} wei`);
       
+      // Verify addresses are different
+      if (!CFC_TOKEN_ADDRESS || !ESCROW_CONTRACT_ADDRESS) {
+        throw new Error('Contract addresses not configured. Check environment variables.');
+      }
+      if (CFC_TOKEN_ADDRESS.toLowerCase() === ESCROW_CONTRACT_ADDRESS.toLowerCase()) {
+        throw new Error('Token and Escrow addresses are the same! Check environment variables.');
+      }
+      
       const tx = await tokenContract.approve(ESCROW_CONTRACT_ADDRESS, amountWei);
       console.log('✅ Approval transaction sent:', tx.hash);
       
@@ -202,7 +210,7 @@ export const useEscrowContract = () => {
       if (err.code === 'ACTION_REJECTED' || err.message?.toLowerCase().includes('user rejected')) {
         message = 'Transaction was rejected by user';
       } else if (err.code === -32603 || err.message?.includes('internal error') || err.message?.includes('does not have a transaction hash')) {
-        message = 'RPC connection error. The BSC Testnet RPC is having issues. Please try again in a few moments, or switch to a different RPC in MetaMask settings.';
+        message = 'RPC connection error. Please try again in a few moments, or switch to a different RPC endpoint in MetaMask.\n\nSuggested RPCs for BSC Mainnet:\n• https://rpc.ankr.com/bsc\n• https://bsc-dataseed.bnbchain.org\n• https://bsc.meowrpc.com';
       } else if (err.message?.includes('insufficient funds')) {
         message = 'Insufficient BNB for gas fees. You need BNB in your wallet to pay for transaction fees.';
       } else if (err.message?.includes('nonce')) {

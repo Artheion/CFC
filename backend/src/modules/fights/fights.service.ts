@@ -211,8 +211,14 @@ export class FightsService {
           {
             jobId: fightId,
             delay: 180000, // 3 minute betting phase (180 seconds)
-            removeOnComplete: false, // Keep for debugging
-            removeOnFail: false,
+            removeOnComplete: {
+              count: 100, // Keep last 100 completed fights
+              age: 3600, // Remove completed jobs older than 1 hour
+            },
+            removeOnFail: {
+              count: 50, // Keep last 50 failed jobs for debugging
+              age: 86400, // Remove failed jobs after 24 hours
+            },
             attempts: 3, // Retry up to 3 times on failure
             backoff: {
               type: 'exponential',
