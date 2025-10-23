@@ -51,13 +51,14 @@ const walletClientToBrowserProvider = (walletClient: ReturnType<typeof useWallet
     eip1193Provider.removeListener = () => {};
   }
 
-  // IMPORTANT: Don't pass chainId to BrowserProvider - let it detect automatically
-  // Passing incorrect chainId causes transaction signing issues
-  const provider = new BrowserProvider(eip1193Provider);
-  console.log('[walletClientToBrowserProvider] Created BrowserProvider', {
-    hasTransport: !!(walletClient as any)?.transport,
-    chainId: (walletClient as any)?.chain?.id,
-  });
+  // CRITICAL: Must pass network/chainId to BrowserProvider for non-Ethereum networks
+  // Without this, the signer may fail to send transactions properly
+  const chainId = (walletClient as any)?.chain?.id || 56; // Default to BSC Mainnet
+  console.log('[walletClientToBrowserProvider] Creating BrowserProvider with chainId:', chainId);
+  
+  const provider = new BrowserProvider(eip1193Provider, chainId);
+  console.log('[walletClientToBrowserProvider] ✅ BrowserProvider created successfully');
+  
   return provider;
 };
 

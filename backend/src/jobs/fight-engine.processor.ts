@@ -61,15 +61,19 @@ export class FightEngineProcessor implements OnModuleInit, OnModuleDestroy {
       return;
     }
     
+    console.log('[FightEngineProcessor] 🔨 Creating Worker instance...');
     this.worker = new Worker<FightJobData>(
       JOB_QUEUE_NAMES.FIGHT_ENGINE,
       async (job) => {
+        console.log(`[FightEngineProcessor] ⚔️  Processing fight job ${job.id}`);
         this.logger.log(`⚔️  Processing fight job ${job.id} with data: ${JSON.stringify(job.data)}`);
         this.logger.log(`⚔️  Fight ID: ${job.data.fightId}`);
         try {
           await this.processFight(job.data.fightId);
+          console.log(`[FightEngineProcessor] ✅ Fight job ${job.id} completed`);
           this.logger.log(`✅ Fight job ${job.id} completed successfully`);
         } catch (error) {
+          console.error(`[FightEngineProcessor] ❌ Fight job ${job.id} error:`, error);
           this.logger.error(`❌ Fight job ${job.id} processing error:`, error);
           throw error;
         }
@@ -79,23 +83,29 @@ export class FightEngineProcessor implements OnModuleInit, OnModuleDestroy {
         concurrency: 1, // Process one fight at a time
       },
     );
+    console.log('[FightEngineProcessor] 🎯 Worker instance created');
 
     this.worker.on('completed', (job) => {
+      console.log(`[FightEngineProcessor] ✅ Worker event: Job ${job.id} completed`);
       this.logger.log(`✅ Fight job ${job.id} completed successfully`);
     });
 
     this.worker.on('failed', (job, err) => {
+      console.error(`[FightEngineProcessor] ❌ Worker event: Job ${job?.id} failed`);
       this.logger.error(`❌ Fight job ${job?.id} failed: ${err.message}`, err.stack);
     });
 
     this.worker.on('error', (err) => {
+      console.error(`[FightEngineProcessor] ❌ Worker error:`, err);
       this.logger.error(`❌ Worker error: ${err.message}`, err.stack);
     });
 
     this.worker.on('active', (job) => {
+      console.log(`[FightEngineProcessor] 🎮 Worker event: Job ${job.id} is now active`);
       this.logger.log(`🎮 Fight job ${job.id} is now active (processing fight ${job.data.fightId})`);
     });
     
+    console.log('[FightEngineProcessor] ✅ FightEngineProcessor worker initialized and listening for jobs');
     this.logger.log('✅ FightEngineProcessor worker initialized and listening for jobs');
     this.logger.log(`📊 Worker concurrency: 1`);
     this.logger.log(`🔊 Worker ready to process ${JOB_QUEUE_NAMES.FIGHT_ENGINE} jobs`);
