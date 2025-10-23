@@ -85,9 +85,9 @@ export class FightEngineProcessor implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    const allowedStatuses: FightStatus[] = [FightStatus.BETTING, FightStatus.QUEUED];
-    if (!allowedStatuses.includes(fight.status)) {
-      this.logger.warn(`Fight ${fightId} is in status ${fight.status}, skipping`);
+    // Only process fights in BETTING status (not QUEUED - those haven't been joined yet)
+    if (fight.status !== FightStatus.BETTING) {
+      this.logger.warn(`Fight ${fightId} is in status ${fight.status}, not BETTING. Skipping.`);
       return;
     }
 
