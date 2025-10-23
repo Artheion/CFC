@@ -52,14 +52,14 @@ const walletClientToBrowserProvider = (walletClient: ReturnType<typeof useWallet
   return new BrowserProvider(eip1193Provider, (walletClient as any)?.chain?.id);
 };
 
-export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { address, isConnected, chain } = useAccount();
-  const { switchChainAsync } = useSwitchChain();
+export const WalletProvider = ({ children }: WalletProviderProps) => {
+  const { address, isConnected, chain, isConnecting, chainId } = useAccount();
+  const { switchChainAsync, isPending: isSwitchingNetwork } = useSwitchChain();
   
   // Auto-switch to BSC mainnet if on wrong network
   useEffect(() => {
     const checkAndSwitchNetwork = async () => {
-      if (isConnected && chain && chain.id !== bsc.id) {
+      if (isConnected && chain?.id && chain.id !== bsc.id) {
         console.log(`[WalletContext] Wrong network detected: ${chain.name} (${chain.id}). Switching to BSC mainnet...`);
         try {
           await switchChainAsync({ chainId: bsc.id });
@@ -80,25 +80,29 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const [networkError, setNetworkError] = useState<string | null>(null);
 
+  const normalizedAddress = address ? getAddress(address) : null;
+  const chainHex = typeof chainId === 'number' ? `0x${chainId.toString(16)}` : chainId ?? null;
+  const expectedChainHex = `0x${bsc.id.toString(16)}`;
+
   useEffect(() => {
-    if (!chain || !address) {
+    if (!chainHex || !normalizedAddress) {
       setNetworkError(null);
       return;
     }
 
     // Check if chainId is a valid EVM chain ID (should be a number)
     // Phantom and other non-EVM wallets might report invalid chain IDs
-    if (typeof chain.id !== 'number' || chain.id <= 0) {
+    if (typeof chainId !== 'number' || chainId <= 0) {
       setNetworkError(null);
       return;
     }
 
-    if (chain.id === bsc.id) {
+    if (chainHex.toLowerCase() === expectedChainHex) {
       setNetworkError(null);
     } else {
       setNetworkError('Please switch to the BNB Smart Chain (BSC) network in your wallet.');
     }
-  }, [chain, address, chain.id]);
+  }, [chainHex, normalizedAddress, chainId]);
 
   const provider = useMemo(() => walletClientToBrowserProvider(walletClient), [walletClient]);
 
@@ -129,21 +133,21 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [switchChainAsync]);
 
-  const isCorrectNetwork = Boolean(chain && chain.id === bsc.id);
+  const isCorrectNetwork = Boolean(chainHex && chainHex.toLowerCase() === expectedChainHex);
 
   const value = useMemo<WalletContextValue>(() => ({
-    address: address ? getAddress(address) : null,
-    chainId: chain?.id ? `0x${chain.id.toString(16)}` : null,
+    address: normalizedAddress,
+    chainId: chainHex,
     provider,
-    isConnecting: false,
+    isConnecting,
     hasWalletConnector: wagmiConfig.connectors.length > 0,
     isCorrectNetwork,
     networkError,
-    isSwitchingNetwork: false,
+    isSwitchingNetwork,
     connect,
     disconnect,
     switchToExpectedNetwork,
-  }), [address, chain, provider, openConnectModal, isCorrectNetwork, networkError, connect, disconnect, switchToExpectedNetwork]);
+  }), [normalizedAddress, chainHex, provider, isConnecting, openConnectModal, isCorrectNetwork, networkError, isSwitchingNetwork, connect, disconnect, switchToExpectedNetwork]);
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;
 };
