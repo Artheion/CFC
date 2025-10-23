@@ -218,6 +218,9 @@ interface GameStore extends GameState {
   hydrateFromBackend: (payload: HydrationPayload) => void;
   logout: () => void;
   refreshBackendState: () => Promise<void>;
+  loadFightsData: () => Promise<void>;
+  loadShopData: () => Promise<void>;
+  loadLeaderboardData: () => Promise<void>;
   setUser: (user: User | null) => void;
   updateProfileInfo: (updates: { username?: string; avatarUrl?: string | null; hasCompletedOnboarding?: boolean }) => Promise<void>;
   addCock: (cock: Cock) => void;
@@ -391,7 +394,9 @@ export const useGameStore = create<GameStore>()(
         if (BACKEND_ENABLED) {
           try {
             await buyItemRequest({ itemSlug, quantity, paymentSignature });
-            await get().refreshBackendState();
+            // Only refresh inventory, not everything
+            const inventory = await fetchInventory();
+            set({ items: mapInventory(inventory) });
             return true;
           } catch (error) {
             console.error('Failed to buy item via backend', error);
@@ -427,42 +432,29 @@ export const useGameStore = create<GameStore>()(
             throw new Error('Unable to load profile from backend');
           }
 
-          // Fetch critical data first (always needed)
+          // Fetch only critical user data (cocks, chickens, eggs, inventory)
+          // Skip secondary data unless absolutely necessary
           const [
             cocks,
             chickens,
             eggs,
             inventory,
-            referral,
           ] = await Promise.all([
             fetchCocks(),
             fetchChickens(),
             fetchEggs(),
             fetchInventory(),
-            fetchReferrals(),
           ]);
 
-          // Fetch secondary data (can be lazy loaded)
-          const [
-            fights,
-            active,
-            history,
-            breedingSessions,
-            bets,
-            catalog,
-            adminReferrals,
-            leaderboard,
-          ] = await Promise.all([
-            fetchFightQueue().catch(() => []),
-            fetchActiveFights().catch(() => []),
-            fetchFightHistory(20).catch(() => []),
-            listActiveBreedingSessions().catch(() => []),
-            listBets().catch(() => []),
-            listShopCatalog().catch(() => []),
-            profile.isAdmin ? fetchAdminReferralCodes().catch(() => []) : Promise.resolve([] as BackendReferralCode[]),
-            fetchLeaderboard().catch(() => null),
-          ]);
+          // Fetch other data separately to reduce initial load
+          const referral = await fetchReferrals().catch(() => null);
+          const breedingSessions = await listActiveBreedingSessions().catch(() => []);
 
+          // Only fetch admin data if user is admin
+          const adminReferrals = profile.isAdmin ? await fetchAdminReferralCodes().catch(() => []) : [];
+
+          // Fights and leaderboard are loaded on-demand in their respective pages
+          // Don't fetch them here to reduce API calls
           get().hydrateFromBackend({
             user: profile,
             cocks,
@@ -470,14 +462,14 @@ export const useGameStore = create<GameStore>()(
             eggs,
             inventory,
             referral,
-            fights,
+            fights: state.fightQueue, // Keep existing fight queue
             adminReferrals,
-            active,
-            history,
+            active: state.activeFights, // Keep existing active fights
+            history: [], // Don't fetch history unless needed
             breedingSessions,
-            bets,
-            catalog,
-            leaderboard,
+            bets: state.spectatorBets, // Keep existing bets
+            catalog: state.shopCatalog, // Keep existing catalog
+            leaderboard: state.leaderboard, // Keep existing leaderboard
           });
         } catch (error) {
           console.error('Failed to refresh backend state', error);
@@ -591,7 +583,11 @@ export const useGameStore = create<GameStore>()(
 
       try {
         await updateProfileRequest(payload);
-        await get().refreshBackendState();
+        // Only refresh profile, not everything
+        const profile = await fetchProfile();
+        if (profile) {
+          set({ user: mapUser(profile) });
+        }
       } catch (error) {
         console.error('Failed to update profile via backend', error);
         throw error;
@@ -665,7 +661,10 @@ export const useGameStore = create<GameStore>()(
 
       try {
         await updateCockProfileRequest(id, payload);
-        await get().refreshBackendState();
+        // Only refresh cocks, not everything
+        const cocks = await fetchCocks();
+        const state = get();
+        set({ cocks: cocks.map((cock) => mapCock(cock, state.user?.username)) });
       } catch (error) {
         console.error('Failed to update cock via backend', error);
         throw error;
@@ -732,7 +731,9 @@ export const useGameStore = create<GameStore>()(
     if (BACKEND_ENABLED) {
       try {
         await startIncubation(eggId);
-        await get().refreshBackendState();
+        // Only refresh eggs, not everything
+        const eggs = await fetchEggs();
+        set({ eggs: eggs.map(mapEgg) });
       } catch (error) {
         console.error('Failed to start incubation via backend', error);
         throw error;
@@ -747,9 +748,17 @@ export const useGameStore = create<GameStore>()(
     if (BACKEND_ENABLED) {
       try {
         const result = await hatchEgg(eggId);
-        await get().refreshBackendState();
-        const user = get().user;
-        return result?.cock ? mapCock(result.cock, user?.username) : null;
+        // Only refresh eggs and cocks, not everything
+        const [eggs, cocks] = await Promise.all([
+          fetchEggs(),
+          fetchCocks()
+        ]);
+        const state = get();
+        set({ 
+          eggs: eggs.map(mapEgg),
+          cocks: cocks.map((cock) => mapCock(cock, state.user?.username))
+        });
+        return result?.cock ? mapCock(result.cock, state.user?.username) : null;
       } catch (error) {
         console.error('Failed to hatch egg via backend', error);
         throw error;
@@ -781,7 +790,9 @@ export const useGameStore = create<GameStore>()(
 
       try {
         await updateChickenProfileRequest(id, payload);
-        await get().refreshBackendState();
+        // Only refresh chickens, not everything
+        const chickens = await fetchChickens();
+        set({ chickens: chickens.map(mapChicken) });
       } catch (error) {
         console.error('Failed to update chicken via backend', error);
         throw error;
@@ -813,10 +824,17 @@ export const useGameStore = create<GameStore>()(
       }
 
       try {
-        console.log('[Store] Using item via backend:', { itemSlug: itemId, cockId });
         await useInventoryItem({ itemSlug: itemId, cockId });
-        await get().refreshBackendState();
-        console.log('[Store] Item used successfully');
+        // Only refresh inventory and the specific cock, not everything
+        const [inventory, cocks] = await Promise.all([
+          fetchInventory(),
+          fetchCocks()
+        ]);
+        const state = get();
+        set({ 
+          items: mapInventory(inventory),
+          cocks: cocks.map((cock) => mapCock(cock, state.user?.username))
+        });
         return true;
       } catch (error) {
         console.error('[Store] Failed to use item via backend:', error);
@@ -1042,7 +1060,15 @@ export const useGameStore = create<GameStore>()(
 
       try {
         await updateReferralCodeSettings(code, payload);
-        await get().refreshBackendState();
+        // Only refresh referral codes
+        const state = get();
+        if (state.user?.isAdmin) {
+          const adminReferrals = await fetchAdminReferralCodes();
+          set({ referralCodes: mapReferralCodes(adminReferrals) });
+        } else {
+          const referral = await fetchReferrals();
+          set({ referralCodes: mapReferralCode(referral) });
+        }
       } catch (error) {
         console.error('Failed to update referral code via backend', error);
         throw error;
@@ -1075,7 +1101,11 @@ export const useGameStore = create<GameStore>()(
     if (BACKEND_ENABLED) {
       try {
         await applyReferralCodeRequest(normalizedCode);
-        await get().refreshBackendState();
+        // Only refresh user profile (which includes referral info)
+        const profile = await fetchProfile();
+        if (profile) {
+          set({ user: mapUser(profile) });
+        }
         return { success: true };
       } catch (error) {
         const message = error instanceof Error && error.message ? error.message : 'Unable to apply referral code.';
@@ -1138,7 +1168,18 @@ export const useGameStore = create<GameStore>()(
     if (BACKEND_ENABLED) {
       try {
         await startBreedingRequest({ cockId, chickenId });
-        await get().refreshBackendState();
+        // Only refresh cocks, chickens, and breeding sessions
+        const [cocks, chickens, breedingSessions] = await Promise.all([
+          fetchCocks(),
+          fetchChickens(),
+          listActiveBreedingSessions()
+        ]);
+        const state = get();
+        set({ 
+          cocks: cocks.map((cock) => mapCock(cock, state.user?.username)),
+          chickens: chickens.map(mapChicken),
+          breedingSessions: mapBreedingSessions(breedingSessions)
+        });
         return true;
       } catch (error) {
         console.error('Failed to start breeding via backend', error);
@@ -1208,7 +1249,20 @@ export const useGameStore = create<GameStore>()(
 
       try {
         await processBreedingSessions();
-        await get().refreshBackendState();
+        // Only refresh related data
+        const [cocks, chickens, eggs, breedingSessions] = await Promise.all([
+          fetchCocks(),
+          fetchChickens(),
+          fetchEggs(),
+          listActiveBreedingSessions()
+        ]);
+        const currentState = get();
+        set({ 
+          cocks: cocks.map((cock) => mapCock(cock, currentState.user?.username)),
+          chickens: chickens.map(mapChicken),
+          eggs: eggs.map(mapEgg),
+          breedingSessions: mapBreedingSessions(breedingSessions)
+        });
       } catch (error) {
         console.error('Failed to process breeding sessions', error);
       }
@@ -1295,7 +1349,9 @@ export const useGameStore = create<GameStore>()(
           paymentSignature: paymentSignature || undefined,
           fightId,
         });
-        await get().refreshBackendState();
+        // Only refresh fight queue, not everything
+        const fights = await fetchFightQueue();
+        set({ fightQueue: mapFightQueue(fights) });
         // Return the created fight object with mapped data
         return mapFightQueue([createdFight])[0] || null;
       } catch (error) {
@@ -1368,7 +1424,15 @@ export const useGameStore = create<GameStore>()(
     if (BACKEND_ENABLED) {
       try {
         const updatedFight = await joinFightRequest(fightQueueId, { cockId, paymentSignature });
-        await get().refreshBackendState();
+        // Only refresh fights, not everything
+        const [fightQueue, activeFights] = await Promise.all([
+          fetchFightQueue(),
+          fetchActiveFights()
+        ]);
+        set({ 
+          fightQueue: mapFightQueue(fightQueue),
+          activeFights: mapFightHistory(activeFights)
+        });
         return updatedFight.id;
       } catch (error) {
         console.error('Failed to join fight via backend', error);
@@ -1471,7 +1535,9 @@ export const useGameStore = create<GameStore>()(
     if (BACKEND_ENABLED) {
       try {
         await cancelFightRequest(fightQueueId);
-        await get().refreshBackendState();
+        // Only refresh fight queue
+        const fights = await fetchFightQueue();
+        set({ fightQueue: mapFightQueue(fights) });
       } catch (error) {
         console.error('Failed to cancel fight via backend', error);
       }
@@ -1503,7 +1569,15 @@ export const useGameStore = create<GameStore>()(
     if (BACKEND_ENABLED) {
       try {
         await placeBetRequest(fightId, { cockId, amount, paymentSignature });
-        await get().refreshBackendState();
+        // Only refresh the specific fight and bets
+        const [activeFights, bets] = await Promise.all([
+          fetchActiveFights(),
+          listBets()
+        ]);
+        set({ 
+          activeFights: mapFightHistory(activeFights),
+          spectatorBets: mapSpectatorBets(bets)
+        });
         return true;
       } catch (error) {
         console.error('Failed to place bet via backend', error);
@@ -1548,14 +1622,52 @@ export const useGameStore = create<GameStore>()(
     }));
 
     return true;
-  },
-
-  updateFightById: (fightId: string, updates: Partial<ActiveFight>) => {
+  },      updateFightById: (fightId: string, updates: Partial<ActiveFight>) => {
     set((state) => ({
       activeFights: state.activeFights.map((f) =>
         f.id === fightId ? { ...f, ...updates } : f
       ),
     }));
+  },
+
+  loadFightsData: async () => {
+    if (!BACKEND_ENABLED) return;
+    
+    try {
+      const [fights, active, history] = await Promise.all([
+        fetchFightQueue(),
+        fetchActiveFights(),
+        fetchFightHistory(20)
+      ]);
+      set({
+        fightQueue: mapFightQueue(fights),
+        activeFights: [...mapFightHistory(active), ...mapFightHistory(history)].sort((a, b) => b.createdAt - a.createdAt)
+      });
+    } catch (error) {
+      console.error('Failed to load fights data', error);
+    }
+  },
+
+  loadShopData: async () => {
+    if (!BACKEND_ENABLED) return;
+    
+    try {
+      const catalog = await listShopCatalog();
+      set({ shopCatalog: mapShopCatalog(catalog) });
+    } catch (error) {
+      console.error('Failed to load shop data', error);
+    }
+  },
+
+  loadLeaderboardData: async () => {
+    if (!BACKEND_ENABLED) return;
+    
+    try {
+      const leaderboard = await fetchLeaderboard();
+      set({ leaderboard: mapLeaderboard(leaderboard) });
+    } catch (error) {
+      console.error('Failed to load leaderboard', error);
+    }
   },
     }),
     {

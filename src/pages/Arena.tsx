@@ -139,7 +139,8 @@ const Arena = () => {
     activeFights,
     createFight, 
     joinFight, 
-    removeFightFromQueue 
+    removeFightFromQueue,
+    loadFightsData
   } = useGameStore();
   const { address, isCorrectNetwork, provider } = useWalletContext();
   const { createMatch, joinMatch, loading: escrowLoading, error: escrowError, isConfigured: escrowConfigured } = useEscrowContract();
@@ -161,6 +162,11 @@ const Arena = () => {
   const [selectedCockForModal, setSelectedCockForModal] = useState<Cock | null>(null);
   const [showInfo, setShowInfo] = useState(false);
   const [showCombatInfo, setShowCombatInfo] = useState(false);
+
+  // Load fights data when page mounts
+  useEffect(() => {
+    void loadFightsData();
+  }, [loadFightsData]);
 
   const {
     containerRef: cockScrollRef,

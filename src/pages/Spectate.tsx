@@ -73,26 +73,49 @@ const Spectate = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Poll backend for fight updates every 2 seconds
+  // Poll backend for fight updates every 5 seconds (reduced from 2s)
+  // Only refresh fight data, not everything
+  // Stop polling when fight is finished
   useEffect(() => {
     if (!fightId) return;
     
-
+    // Initial fetch - only get this specific fight, not all data
+    const fetchFightOnly = async () => {
+      try {
+        const { fetchFightDetails } = await import('../utils/apiClient');
+        const { mapFightHistory } = await import('../utils/backendMappers');
+        const fightData = await fetchFightDetails(fightId);
+        if (fightData) {
+          const mappedFight = mapFightHistory([fightData])[0];
+          if (mappedFight) {
+            updateFightById(fightId, mappedFight);
+            // Stop polling if fight is finished
+            if (mappedFight.status === 'finished') {
+              return true; // Signal to stop polling
+            }
+          }
+        }
+        return false;
+      } catch (error) {
+        console.error('[Spectate] Failed to fetch fight details:', error);
+        return false;
+      }
+    };
     
-    // Initial fetch
-    refreshBackendState();
+    fetchFightOnly();
     
-    // Poll every 2 seconds
-    const pollInterval = setInterval(() => {
-
-      refreshBackendState();
-    }, 2000);
+    // Poll every 5 seconds for just this fight
+    const pollInterval = setInterval(async () => {
+      const shouldStop = await fetchFightOnly();
+      if (shouldStop) {
+        clearInterval(pollInterval);
+      }
+    }, 5000);
     
     return () => {
-
       clearInterval(pollInterval);
     };
-  }, [fightId, refreshBackendState]);
+  }, [fightId, updateFightById]);
 
   // Track initial fight status on mount
   useEffect(() => {

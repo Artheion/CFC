@@ -160,7 +160,7 @@ const Shop = () => {
   const buyShopItem = useGameStore((state) => state.buyShopItem);
   const { balance: cfcBalance } = useWalletBalance(); // $CFC token balance for items
   const { balance: bnbBalance } = useNativeBalance(); // Native BNB for roulette
-  const loadShopCatalog = useGameStore((state) => state.loadShopCatalog);
+  const loadShopData = useGameStore((state) => state.loadShopData);
   const shopCatalog = useGameStore((state) => state.shopCatalog);
   const [spinItems, setSpinItems] = useState<RouletteItem[]>(() => buildIdleSequence());
   const [currentOffset, setCurrentOffset] = useState(0);
@@ -181,7 +181,7 @@ const Shop = () => {
   
   useEffect(() => {
     if (BACKEND_ENABLED) {
-      void loadShopCatalog();
+      void loadShopData();
       
       // Fetch roulette cost and user's referral info from backend
       const fetchPrices = async () => {
@@ -211,7 +211,7 @@ const Shop = () => {
       const handlePriceUpdate = () => {
 
         void fetchPrices();
-        void loadShopCatalog();
+        void loadShopData();
       };
       
       window.addEventListener('pricesUpdated', handlePriceUpdate);

@@ -10,9 +10,8 @@ import { formatCFC } from '../utils/formatNumber';
 
 const Leaderboard = () => {
   const { t } = useTranslation();
-  const { user, leaderboard, loadLeaderboard } = useGameStore();
+  const { user, leaderboard, loadLeaderboardData } = useGameStore();
   const [selectedCockForModal, setSelectedCockForModal] = useState<Cock | null>(null);
-  const [hasRequestedLeaderboard, setHasRequestedLeaderboard] = useState(false);
 
   // Format owner display name
   const getOwnerDisplay = (cock: Cock) => {
@@ -24,12 +23,10 @@ const Leaderboard = () => {
     return `${addr.slice(0, 4)}...${addr.slice(-4)}`;
   };
 
+  // Load leaderboard data when page mounts
   useEffect(() => {
-    if (!hasRequestedLeaderboard) {
-      setHasRequestedLeaderboard(true);
-      void loadLeaderboard();
-    }
-  }, [hasRequestedLeaderboard, loadLeaderboard]);
+    void loadLeaderboardData();
+  }, [loadLeaderboardData]);
 
   if (!user) {
     return (
