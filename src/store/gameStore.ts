@@ -209,6 +209,12 @@ const getDefaultState = () => ({
   leaderboard: { mostWins: [], highestEarnings: [] },
   loading: false,
   isHydrated: false,
+  // Add cache timestamps to prevent excessive refetching
+  lastFetchTimestamps: {
+    fights: 0,
+    shop: 0,
+    leaderboard: 0,
+  } as Record<string, number>,
 });
 
 interface GameStore extends GameState {
@@ -1633,6 +1639,15 @@ export const useGameStore = create<GameStore>()(
   loadFightsData: async () => {
     if (!BACKEND_ENABLED) return;
     
+    const state = get();
+    const now = Date.now();
+    const CACHE_DURATION = 30000; // 30 seconds
+    
+    // Skip if data was fetched recently (within 30s)
+    if (now - state.lastFetchTimestamps.fights < CACHE_DURATION) {
+      return;
+    }
+    
     try {
       const [fights, active, history] = await Promise.all([
         fetchFightQueue(),
@@ -1641,7 +1656,8 @@ export const useGameStore = create<GameStore>()(
       ]);
       set({
         fightQueue: mapFightQueue(fights),
-        activeFights: [...mapFightHistory(active), ...mapFightHistory(history)].sort((a, b) => b.createdAt - a.createdAt)
+        activeFights: [...mapFightHistory(active), ...mapFightHistory(history)].sort((a, b) => b.createdAt - a.createdAt),
+        lastFetchTimestamps: { ...state.lastFetchTimestamps, fights: now }
       });
     } catch (error) {
       console.error('Failed to load fights data', error);
@@ -1651,9 +1667,21 @@ export const useGameStore = create<GameStore>()(
   loadShopData: async () => {
     if (!BACKEND_ENABLED) return;
     
+    const state = get();
+    const now = Date.now();
+    const CACHE_DURATION = 60000; // 60 seconds (shop data changes less frequently)
+    
+    // Skip if data was fetched recently (within 60s)
+    if (now - state.lastFetchTimestamps.shop < CACHE_DURATION) {
+      return;
+    }
+    
     try {
       const catalog = await listShopCatalog();
-      set({ shopCatalog: mapShopCatalog(catalog) });
+      set({ 
+        shopCatalog: mapShopCatalog(catalog),
+        lastFetchTimestamps: { ...state.lastFetchTimestamps, shop: now }
+      });
     } catch (error) {
       console.error('Failed to load shop data', error);
     }
@@ -1662,9 +1690,21 @@ export const useGameStore = create<GameStore>()(
   loadLeaderboardData: async () => {
     if (!BACKEND_ENABLED) return;
     
+    const state = get();
+    const now = Date.now();
+    const CACHE_DURATION = 60000; // 60 seconds (leaderboard updates slowly)
+    
+    // Skip if data was fetched recently (within 60s)
+    if (now - state.lastFetchTimestamps.leaderboard < CACHE_DURATION) {
+      return;
+    }
+    
     try {
       const leaderboard = await fetchLeaderboard();
-      set({ leaderboard: mapLeaderboard(leaderboard) });
+      set({ 
+        leaderboard: mapLeaderboard(leaderboard),
+        lastFetchTimestamps: { ...state.lastFetchTimestamps, leaderboard: now }
+      });
     } catch (error) {
       console.error('Failed to load leaderboard', error);
     }
