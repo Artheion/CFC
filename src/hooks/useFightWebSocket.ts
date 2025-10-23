@@ -59,7 +59,6 @@ export const useFightWebSocket = (fightId: string | undefined) => {
     const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
     console.log(`[WebSocket] Connecting to fight: ${fightId}`);
     console.log(`[WebSocket] API Base URL: ${apiBaseUrl}`);
-    console.log(`[WebSocket] Full URL: ${apiBaseUrl}/fights`);
     
     if (!apiBaseUrl) {
       console.error('[WebSocket] ❌ VITE_API_BASE_URL is not set! WebSocket cannot connect.');
@@ -67,8 +66,14 @@ export const useFightWebSocket = (fightId: string | undefined) => {
       return;
     }
 
+    // WebSocket is served at root level, not under /api prefix
+    // So we need to strip /api from the URL
+    const wsBaseUrl = apiBaseUrl.replace(/\/api\/?$/, '');
+    console.log(`[WebSocket] WebSocket Base URL: ${wsBaseUrl}`);
+    console.log(`[WebSocket] Full URL: ${wsBaseUrl}/fights`);
+
     // Connect to WebSocket namespace
-    const socket = io(`${apiBaseUrl}/fights`, {
+    const socket = io(`${wsBaseUrl}/fights`, {
       transports: ['websocket', 'polling'],
       auth: {
         token: localStorage.getItem('cfc.accessToken'), // JWT auth
