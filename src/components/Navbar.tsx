@@ -1,11 +1,11 @@
 import { Link, useLocation } from 'react-router-dom';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { formatEther } from 'ethers';
 import { useGameStore } from '../store/gameStore';
 import { ADMIN_WALLET_ADDRESS } from '../config';
 import cfcLogo from '../assets/CFC-Logo.png';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { authenticateWithWallet, isCurrentlyAuthenticating } from '../utils/apiClient';
+import { authenticateWithWallet, isCurrentlyAuthenticating, getAccessToken } from '../utils/apiClient';
 import { useWalletContext } from '../contexts/WalletContext';
 import { useTranslation } from 'react-i18next';
 import LanguageSwitcher from './LanguageSwitcher';
@@ -16,6 +16,9 @@ const BACKEND_ENABLED = Boolean(import.meta.env.VITE_API_BASE_URL);
 const Navbar = () => {
   const { t } = useTranslation();
   const location = useLocation();
+  const attemptedAddresses = useRef<Set<string>>(new Set());
+  const isAuthenticating = useRef(false);
+  const authenticationPromise = useRef<Promise<void> | null>(null);
   const {
     address,
     provider,
@@ -39,39 +42,48 @@ const Navbar = () => {
 
   // Initialize user when wallet connects and fetch real BNB balance
   useEffect(() => {
-    if (!address) {
-      // Clear all state when wallet disconnects
-      if (user || isHydrated) {
-        console.log('[Navbar] Wallet disconnected, clearing state');
-        logout();
-        setLastAuthAttemptAddress(null);
-      }
-      return;
-    }
-
-    if (!isCorrectNetwork) {
-      console.log('[Navbar] ⚠️ Wrong network, waiting for correct network');
-      return;
-    }
-
-    if (BACKEND_ENABLED) {
-      // If already authenticated for this address, skip
-      if (user && user.walletAddress === address && isHydrated) {
+    let cancelled = false;
+    
+    const authenticate = async () => {
+      const currentAddress = address?.toLowerCase();
+      
+      if (!currentAddress || !provider) {
         return;
       }
-
-      // Prevent duplicate authentication attempts for the same address
-      if (lastAuthAttemptAddress === address) {
+      
+      // CRITICAL FIX: Skip if already authenticated with valid token
+      if (user && user.walletAddress?.toLowerCase() === currentAddress) {
+        const token = getAccessToken();
+        if (token) {
+          console.log('[Navbar] ✅ Already authenticated with valid token, skipping');
+          return;
+        }
+      }
+      
+      // Prevent duplicate auth for same address
+      if (attemptedAddresses.current.has(currentAddress)) {
         console.log('[Navbar] Already attempted auth for this address, skipping');
         return;
       }
-
-      // Check if authentication is already in progress globally
-      if (isCurrentlyAuthenticating()) {
-        console.log('[Navbar] Authentication already in progress globally, skipping');
+      
+      // Prevent multiple simultaneous authentication attempts
+      if (isAuthenticating.current) {
+        console.log('[Navbar] Already authenticating, waiting for completion...');
+        if (authenticationPromise.current) {
+          await authenticationPromise.current;
+        }
         return;
       }
 
+      isAuthenticating.current = true;
+      attemptedAddresses.current.add(currentAddress);
+      
+      // Create authentication promise for others to wait on
+      let resolveAuth: (() => void) | undefined;
+      authenticationPromise.current = new Promise<void>((resolve) => {
+        resolveAuth = resolve;
+      });
+      
       let cancelled = false;
       console.log('[Navbar] 🚀 Authenticating wallet:', address);
       setLastAuthAttemptAddress(address);
@@ -121,6 +133,9 @@ const Navbar = () => {
           if (!cancelled) {
             setLoading(false);
           }
+          isAuthenticating.current = false;
+          authenticationPromise.current = null;
+          resolveAuth?.();
         }
       };
 
@@ -129,7 +144,7 @@ const Navbar = () => {
       return () => {
         cancelled = true;
       };
-    }
+    };
 
     // Offline/testing fallback without backend
     if (!user && provider && isCorrectNetwork) {

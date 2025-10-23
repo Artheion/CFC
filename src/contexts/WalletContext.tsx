@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { BrowserProvider, getAddress } from 'ethers';
 import { useAccount, useDisconnect, useSwitchChain, useWalletClient } from 'wagmi';
 import { useConnectModal } from '@rainbow-me/rainbowkit';
+import { bsc } from 'wagmi/chains';
 
 import { BNB_CHAIN_CONFIG } from '../config';
 import { wagmiConfig } from '../wallet/config';
@@ -51,37 +52,53 @@ const walletClientToBrowserProvider = (walletClient: ReturnType<typeof useWallet
   return new BrowserProvider(eip1193Provider, (walletClient as any)?.chain?.id);
 };
 
-export const WalletProvider = ({ children }: WalletProviderProps) => {
-  const { address, chainId, isConnecting } = useAccount();
-  const normalizedAddress = address ? getAddress(address) : null;
-  const chainHex = typeof chainId === 'number' ? `0x${chainId.toString(16)}` : chainId ?? null;
+export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { address, isConnected, chain } = useAccount();
+  const { switchChainAsync } = useSwitchChain();
+  
+  // Auto-switch to BSC mainnet if on wrong network
+  useEffect(() => {
+    const checkAndSwitchNetwork = async () => {
+      if (isConnected && chain && chain.id !== bsc.id) {
+        console.log(`[WalletContext] Wrong network detected: ${chain.name} (${chain.id}). Switching to BSC mainnet...`);
+        try {
+          await switchChainAsync({ chainId: bsc.id });
+          console.log('[WalletContext] ✅ Successfully switched to BSC mainnet');
+        } catch (error) {
+          console.error('[WalletContext] Failed to switch network:', error);
+          // Don't block connection, just warn user
+        }
+      }
+    };
+    
+    checkAndSwitchNetwork();
+  }, [isConnected, chain, switchChainAsync]);
 
   const { disconnectAsync } = useDisconnect();
-  const { switchChainAsync, isPending: isSwitchingNetwork } = useSwitchChain();
   const { data: walletClient } = useWalletClient();
   const { openConnectModal } = useConnectModal();
 
   const [networkError, setNetworkError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!chainHex || !normalizedAddress) {
+    if (!chain || !address) {
       setNetworkError(null);
       return;
     }
 
     // Check if chainId is a valid EVM chain ID (should be a number)
     // Phantom and other non-EVM wallets might report invalid chain IDs
-    if (typeof chainId !== 'number' || chainId <= 0) {
+    if (typeof chain.id !== 'number' || chain.id <= 0) {
       setNetworkError(null);
       return;
     }
 
-    if (chainHex.toLowerCase() === expectedChainHex) {
+    if (chain.id === bsc.id) {
       setNetworkError(null);
     } else {
       setNetworkError('Please switch to the BNB Smart Chain (BSC) network in your wallet.');
     }
-  }, [chainHex, normalizedAddress, chainId]);
+  }, [chain, address, chain.id]);
 
   const provider = useMemo(() => walletClientToBrowserProvider(walletClient), [walletClient]);
 
@@ -112,21 +129,21 @@ export const WalletProvider = ({ children }: WalletProviderProps) => {
     }
   }, [switchChainAsync]);
 
-  const isCorrectNetwork = Boolean(chainHex && chainHex.toLowerCase() === expectedChainHex);
+  const isCorrectNetwork = Boolean(chain && chain.id === bsc.id);
 
   const value = useMemo<WalletContextValue>(() => ({
-    address: normalizedAddress,
-    chainId: chainHex,
+    address: address ? getAddress(address) : null,
+    chainId: chain?.id ? `0x${chain.id.toString(16)}` : null,
     provider,
-    isConnecting,
+    isConnecting: false,
     hasWalletConnector: wagmiConfig.connectors.length > 0,
     isCorrectNetwork,
     networkError,
-    isSwitchingNetwork,
+    isSwitchingNetwork: false,
     connect,
     disconnect,
     switchToExpectedNetwork,
-  }), [normalizedAddress, chainHex, provider, isConnecting, openConnectModal, isCorrectNetwork, networkError, isSwitchingNetwork, connect, disconnect, switchToExpectedNetwork]);
+  }), [address, chain, provider, openConnectModal, isCorrectNetwork, networkError, connect, disconnect, switchToExpectedNetwork]);
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;
 };
