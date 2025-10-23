@@ -17,6 +17,7 @@ import { useEscrowContract } from '../hooks/useEscrowContract';
 import { formatCFC } from '../utils/formatNumber';
 import NetworkMismatchNotice from '../components/NetworkMismatchNotice';
 import { hasValidAuth, authenticateWithWallet } from '../utils/apiClient';
+import { useFightWebSocket } from '../hooks/useFightWebSocket';
 
 const Spectate = () => {
   const { t } = useTranslation();
@@ -26,6 +27,9 @@ const Spectate = () => {
   const { address, isCorrectNetwork, provider } = useWalletContext();
   const { cfcBalance } = useWalletBalance();
   const { placeBet: placeBetOnContract, loading: escrowLoading, error: escrowError, isConfigured: escrowConfigured } = useEscrowContract();
+  
+  // ✅ REAL-TIME: Connect to WebSocket for synchronized fight updates
+  const { isConnected, fightStarting, roundStart, roundComplete, fightFinished, error: wsError } = useFightWebSocket(fightId);
   
   const [selectedWinner, setSelectedWinner] = useState<string>('');
   const [betAmount, setBetAmount] = useState('');
@@ -73,109 +77,29 @@ const Spectate = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Poll backend for fight updates every 5 seconds (reduced from 2s)
-  // Only refresh fight data, not everything
-  // Stop polling when fight is finished
+  // ✅ REAL-TIME: Handle fight starting event
   useEffect(() => {
-    if (!fightId) return;
+    if (!fightStarting) return;
     
-    // Initial fetch - only get this specific fight, not all data
-    const fetchFightOnly = async () => {
-      try {
-        const { fetchFightDetails } = await import('../utils/apiClient');
-        const { mapFightHistory } = await import('../utils/backendMappers');
-        const fightData = await fetchFightDetails(fightId);
-        if (fightData) {
-          const mappedFight = mapFightHistory([fightData])[0];
-          if (mappedFight) {
-            updateFightById(fightId, mappedFight);
-            // Stop polling if fight is finished
-            if (mappedFight.status === 'finished') {
-              return true; // Signal to stop polling
-            }
-          }
-        }
-        return false;
-      } catch (error) {
-        console.error('[Spectate] Failed to fetch fight details:', error);
-        return false;
-      }
-    };
-    
-    fetchFightOnly();
-    
-    // Poll every 5 seconds for just this fight
-    const pollInterval = setInterval(async () => {
-      const shouldStop = await fetchFightOnly();
-      if (shouldStop) {
-        clearInterval(pollInterval);
-      }
-    }, 5000);
-    
-    return () => {
-      clearInterval(pollInterval);
-    };
-  }, [fightId, updateFightById]);
-
-  // Track initial fight status on mount
-  useEffect(() => {
-    if (fight && initialFightStatusRef.current === null) {
-      initialFightStatusRef.current = fight.status;
-
-      
-      // If fight was already finished on load, show results immediately
-      if (fight.status === 'finished') {
-
-        setArenaPhase('finished');
-        setFightPhase('finished');
-        setAnimationStarted(true); // Mark as done so we don't animate
-      }
-    }
-  }, [fight]);
-
-  // Initialize arena state based on current fight status
-  useEffect(() => {
-    if (!fight || !cock1 || !cock2) return;
-
-    if (fight.status === 'betting') {
-
-      setArenaPhase('idle');
-      setFightPhase('betting');
-      setAnimatedRounds([]);
-      setCurrentAnimatedRound(0);
-      setDisplayHealth({ cock1: 100, cock2: 100 });
-      setAnimationStarted(false);
-    } else if (fight.status === 'finished' && fight.rounds && fight.rounds.length > 0) {
-      // Only animate if we saw the fight during betting (not already finished on load)
-      if (!animationStarted && initialFightStatusRef.current === 'betting') {
-
-        setAnimationStarted(true);
-        startRound(1);
-      }
-    }
-  }, [fight?.status, animationStarted, cock1, cock2]); // React to status and animation state
-
-  const startRound = (roundNumber: number) => {
-    if (!fight || !cock1 || !cock2 || !fight.rounds) return;
-
-    // Get backend round (the source of truth!)
-    const backendRound = fight.rounds[roundNumber - 1];
-    if (!backendRound) {
-      return;
-    }
-
-
-
-    // Reset display health to 100 for new round
+    console.log('[Spectate] 🎮 Fight starting!', fightStarting);
+    setArenaPhase('idle');
+    setAnimatedRounds([]);
+    setCurrentAnimatedRound(0);
     setDisplayHealth({ cock1: 100, cock2: 100 });
-    setCurrentAnimatedRound(roundNumber);
+  }, [fightStarting]);
 
-    // Facing phase - 5 second countdown
+  // ✅ REAL-TIME: Handle round start event
+  useEffect(() => {
+    if (!roundStart) return;
+    
+    console.log('[Spectate] ⚔️  Round starting:', roundStart.roundNumber);
+    setCurrentAnimatedRound(roundStart.roundNumber);
     setArenaPhase('facing');
     setArenaCountdown(5);
     setKnockoutInfo(null);
-    setFightPhase(`round${roundNumber}` as any);
-
+    setFightPhase(`round${roundStart.roundNumber}` as any);
+    
+    // Countdown animation
     let countdown = 5;
     const countdownInterval = setInterval(() => {
       countdown--;
@@ -184,196 +108,99 @@ const Spectate = () => {
       } else {
         clearInterval(countdownInterval);
         setArenaCountdown(null);
+        setArenaPhase('fighting');
       }
     }, 1000);
+    
+    return () => clearInterval(countdownInterval);
+  }, [roundStart]);
 
-    // Start animating health bars after 5 seconds
-    setTimeout(() => {
-      setArenaPhase('fighting');
-      clearInterval(countdownInterval);
-      setArenaCountdown(null);
-
-      // Animate health bars smoothly to backend values (no recalculation!)
-      let currentCock1Health = 100;
-      let currentCock2Health = 100;
-      const targetCock1Health = backendRound.cock1Health;
-      const targetCock2Health = backendRound.cock2Health;
-
-      // Calculate animation parameters
-      const cock1HealthDrop = 100 - targetCock1Health;
-      const cock2HealthDrop = 100 - targetCock2Health;
-      const maxHealthDrop = Math.max(cock1HealthDrop, cock2HealthDrop);
-      const animationDuration = Math.max(20000, maxHealthDrop * 150); // At least 20 seconds for dramatic, longer fights
-      const updateInterval = 150; // Update every 150ms for smoother animation
-      const stepsNeeded = Math.ceil(animationDuration / updateInterval);
-      const cock1HealthDropPerStep = cock1HealthDrop / stepsNeeded;
-      const cock2HealthDropPerStep = cock2HealthDrop / stepsNeeded;
-
-      let currentStep = 0;
-      const animationInterval = setInterval(() => {
-        currentStep++;
-
-        // Gradually decrease health to match backend result
-        currentCock1Health = Math.max(targetCock1Health, 100 - (cock1HealthDropPerStep * currentStep));
-        currentCock2Health = Math.max(targetCock2Health, 100 - (cock2HealthDropPerStep * currentStep));
-
-        setDisplayHealth({
-          cock1: Math.round(currentCock1Health),
-          cock2: Math.round(currentCock2Health),
+  // ✅ REAL-TIME: Handle round complete event (CRITICAL - syncs all clients)
+  useEffect(() => {
+    if (!roundComplete || !cock1 || !cock2) return;
+    
+    console.log('[Spectate] ✅ Round complete:', roundComplete);
+    
+    // Animate health bars to final values
+    let currentCock1Health = displayHealth.cock1;
+    let currentCock2Health = displayHealth.cock2;
+    const targetCock1Health = roundComplete.cock1Health;
+    const targetCock2Health = roundComplete.cock2Health;
+    
+    const animationDuration = 20000; // 20 seconds
+    const updateInterval = 150;
+    const stepsNeeded = Math.ceil(animationDuration / updateInterval);
+    const cock1HealthStep = (currentCock1Health - targetCock1Health) / stepsNeeded;
+    const cock2HealthStep = (currentCock2Health - targetCock2Health) / stepsNeeded;
+    
+    let currentStep = 0;
+    const animationInterval = setInterval(() => {
+      currentStep++;
+      
+      currentCock1Health = Math.max(targetCock1Health, currentCock1Health - cock1HealthStep);
+      currentCock2Health = Math.max(targetCock2Health, currentCock2Health - cock2HealthStep);
+      
+      setDisplayHealth({
+        cock1: Math.round(currentCock1Health),
+        cock2: Math.round(currentCock2Health),
+      });
+      
+      if (currentCock1Health <= targetCock1Health && currentCock2Health <= targetCock2Health) {
+        clearInterval(animationInterval);
+        
+        // Show knockout animation
+        setKnockoutInfo({
+          winnerId: roundComplete.winnerId,
+          loserId: roundComplete.winnerId === cock1.id ? cock2.id : cock1.id,
         });
-
-        // Animation complete when both reach target values
-        if (currentCock1Health <= targetCock1Health && currentCock2Health <= targetCock2Health) {
-          clearInterval(animationInterval);
-
-          // Use backend winner (the truth!)
-          const roundWinnerId = backendRound.winnerId;
-          const roundLoserId = roundWinnerId === cock1.id ? cock2.id : cock1.id;
-
-          // Show knockout animation
-          setKnockoutInfo({ winnerId: roundWinnerId, loserId: roundLoserId });
-          setArenaPhase('between');
-
-          // Add round to animated rounds (using backend data!)
-          const completedRound: FightRound = {
-            roundNumber,
-            winnerId: roundWinnerId,
-            cock1Damage: Math.round(100 - targetCock1Health),
-            cock2Damage: Math.round(100 - targetCock2Health),
-            cock1Health: targetCock1Health,
-            cock2Health: targetCock2Health,
-          };
-
-          setAnimatedRounds(prev => [...prev, completedRound]);
-
-          // Calculate wins from animated rounds
-          const allRounds = [...animatedRounds, completedRound];
-          const cock1Wins = allRounds.filter(r => r.winnerId === cock1.id).length;
-          const cock2Wins = allRounds.filter(r => r.winnerId === cock2.id).length;
-
-
-
-          // Check if fight is over (best of 3 - first to 2 wins)
-          if (cock1Wins >= 2) {
-
-            setTimeout(() => {
-              // Set final knockout info for the overall fight loser
-              setKnockoutInfo({ winnerId: cock1.id, loserId: cock2.id });
-              setArenaPhase('finished');
-              setFightPhase('finished');
-            }, 3000);
-          } else if (cock2Wins >= 2) {
-
-            setTimeout(() => {
-              // Set final knockout info for the overall fight loser
-              setKnockoutInfo({ winnerId: cock2.id, loserId: cock1.id });
-              setArenaPhase('finished');
-              setFightPhase('finished');
-            }, 3000);
-          } else {
-            // Continue to next round
-            setTimeout(() => {
-              startRound(roundNumber + 1);
-            }, 3000);
-          }
-        }
-      }, updateInterval);
-    }, 5000); // 5 second countdown
-  };
-
-  const endFight = (winnerId: string) => {
-    if (!fight || !cock1 || !cock2) return;
-
-    // Update fight status
-    updateFightById(fight.id, {
-      status: 'finished',
-      winnerId,
-    });
-
-    setFightPhase('finished');
-    setArenaPhase('finished');
-    setArenaCountdown(null);
-
-    // Calculate total pot (main wager + all bets)
-    const totalBetAmount = fight.spectatorBets.reduce((sum, bet) => sum + bet.amount, 0);
-    const totalMainPot = fight.wager * 2; // Both fighters' wagers
-    const totalPot = totalMainPot + totalBetAmount;
-
-    // Resolve the latest cock data from the store to avoid stale references
-    const latestState = useGameStore.getState();
-    const latestCock1 = latestState.cocks.find(c => c.id === fight.cock1Id) || cock1;
-    const latestCock2 = latestState.cocks.find(c => c.id === fight.cock2Id) || cock2;
-
-    const winner = winnerId === latestCock1.id ? latestCock1 : latestCock2;
-    const loser = winnerId === latestCock1.id ? latestCock2 : latestCock1;
-    
-    // Apply energy cost based on rounds fought
-    const latestFight = getFightById(fight.id);
-    const fightRounds = latestFight?.rounds ?? fight.rounds;
-    const roundsFought = fightRounds.length;
-    const winnerEnergyCost = calculateEnergyCost(roundsFought, winner.stats.stamina);
-    const loserEnergyCost = calculateEnergyCost(roundsFought, loser.stats.stamina);
-    
-    const { currentEnergy: winnerEnergy } = getEnergyStats(winner);
-    const { currentEnergy: loserEnergy } = getEnergyStats(loser);
-
-    const winnerRoundsLost = fightRounds.filter(r => r.winnerId !== winner.id).length;
-    const loserRoundsLost = fightRounds.filter(r => r.winnerId !== loser.id).length;
-    const winnerHealthLoss = winnerRoundsLost * 10;
-    const loserHealthLoss = loserRoundsLost * 10;
-    const winnerNewHealth = Math.max(0, winner.health - winnerHealthLoss);
-    const loserNewHealth = Math.max(0, loser.health - loserHealthLoss);
-    
-    updateCock(winner.id, { 
-      wins: winner.wins + 1,
-      energy: Math.max(0, winnerEnergy - winnerEnergyCost),
-      health: winnerNewHealth
-    });
-    updateCock(loser.id, { 
-      losses: loser.losses + 1,
-      energy: Math.max(0, loserEnergy - loserEnergyCost),
-      health: loserNewHealth
-    });
-
-    // Award winnings
-    // 1. Calculate rarity bonus percentage based on winner's rarity
-    const rarityBonuses: Record<string, number> = {
-      'common': 0.02,
-      'uncommon': 0.03,
-      'rare': 0.04,
-      'epic': 0.05,
-      'legendary': 0.06
-    };
-    const rarityBonus = rarityBonuses[winner.rarity] || 0.02;
-    
-    // Winner of main fight gets: their original wager back + opponent's wager + rarity% of spectator bets
-    const fighterBonusFromBets = totalBetAmount * rarityBonus;
-    const fighterWinnings = totalMainPot + fighterBonusFromBets;
-    
-    // Award fighter winnings to the cock owner if they're the current user
-    if (winner.ownerAddress === user?.walletAddress) {
-      updateBNBBalance(fighterWinnings);
-    }
-
-    // 2. Distribute remaining spectator bets to correct bettors
-    const correctBets = fight.spectatorBets.filter(bet => bet.cockId === winnerId);
-    const incorrectBets = fight.spectatorBets.filter(bet => bet.cockId !== winnerId);
-    const correctBetTotal = correctBets.reduce((sum, bet) => sum + bet.amount, 0);
-    const bettorShare = totalBetAmount * (1 - rarityBonus); // Remaining after fighter takes their bonus
-
-
-
-    // Award winnings to correct bettors
-    correctBets.forEach(bet => {
-      if (bet.userId === user?.walletAddress && correctBetTotal > 0) {
-        const winnings = (bet.amount / correctBetTotal) * bettorShare;
-
-        updateBNBBalance(winnings);
+        setArenaPhase('between');
+        
+        // Add round to history
+        setAnimatedRounds(prev => [...prev, {
+          roundNumber: roundComplete.roundNumber,
+          winnerId: roundComplete.winnerId,
+          cock1Damage: roundComplete.cock1Damage,
+          cock2Damage: roundComplete.cock2Damage,
+          cock1Health: roundComplete.cock1Health,
+          cock2Health: roundComplete.cock2Health,
+        }]);
       }
-    });
+    }, updateInterval);
+    
+    return () => clearInterval(animationInterval);
+  }, [roundComplete, cock1, cock2, displayHealth]);
 
-    // Note: Losing bettors already lost their money when they placed the bet
-  };
+  // ✅ REAL-TIME: Handle fight finished event
+  useEffect(() => {
+    if (!fightFinished || !cock1 || !cock2 || !fightId) return;
+    
+    console.log('[Spectate] 🏆 Fight finished! Winner:', fightFinished.winnerId);
+    
+    // Wait for final animation
+    setTimeout(() => {
+      setKnockoutInfo({
+        winnerId: fightFinished.winnerId,
+        loserId: fightFinished.winnerId === cock1.id ? cock2.id : cock1.id,
+      });
+      setArenaPhase('finished');
+      setFightPhase('finished');
+      
+      // Update fight status in store
+      updateFightById(fightId, {
+        status: 'finished',
+        winnerId: fightFinished.winnerId,
+      });
+    }, 3000);
+  }, [fightFinished, cock1, cock2, fightId, updateFightById]);
+
+  // ✅ REAL-TIME: Show WebSocket errors
+  useEffect(() => {
+    if (wsError) {
+      console.error('[Spectate] WebSocket error:', wsError);
+    }
+  }, [wsError]);
+
+  // ✅ REMOVED: startRound() and endFight() functions - backend now controls timing via WebSocket
 
   // Calculate mutual parley odds
   const calculateOdds = () => {
@@ -548,6 +375,20 @@ const Spectate = () => {
 
   return (
     <div className="min-h-screen bg-background-dark">
+      {/* ✅ REAL-TIME: WebSocket Connection Status */}
+      {isConnected && (
+        <div className="fixed top-20 right-4 z-50 flex items-center gap-2 bg-green-500/20 border border-green-500 rounded-lg px-3 py-2 text-sm">
+          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+          <span className="text-green-400 font-semibold">LIVE</span>
+        </div>
+      )}
+      {!isConnected && fightId && (
+        <div className="fixed top-20 right-4 z-50 flex items-center gap-2 bg-yellow-500/20 border border-yellow-500 rounded-lg px-3 py-2 text-sm">
+          <div className="w-2 h-2 bg-yellow-500 rounded-full" />
+          <span className="text-yellow-400 font-semibold">Connecting...</span>
+        </div>
+      )}
+      
       {/* Fight Info Header */}
       <div className="border-b border-white/10 bg-background-dark/80 px-4 py-6 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">

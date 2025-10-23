@@ -20,12 +20,22 @@ interface FightJobData {
 export class FightEngineProcessor implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(FightEngineProcessor.name);
   private worker?: Worker<FightJobData>;
+  private gateway: any; // Will be injected via setter
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly queueService: QueueService,
     private readonly escrowService: EscrowService,
   ) {}
+
+  /**
+   * Setter injection for FightsGateway to avoid circular dependency
+   * Called from FightsModule after both services are instantiated
+   */
+  setGateway(gateway: any) {
+    this.gateway = gateway;
+    this.logger.log('✅ FightsGateway injected into FightEngineProcessor');
+  }
 
   async onModuleInit() {
     this.logger.log('Initializing FightEngineProcessor worker...');
@@ -54,8 +64,12 @@ export class FightEngineProcessor implements OnModuleInit, OnModuleDestroy {
     await this.worker?.close();
   }
 
+  /**
+   * Process fight in REAL-TIME with sequential rounds
+   * ✅ Best Practice: Server-authoritative with client synchronization
+   */
   private async processFight(fightId: string) {
-    this.logger.log(`[FightEngine] Starting to process fight ${fightId}`);
+    this.logger.log(`[FightEngine] 🎮 Starting REAL-TIME fight processing: ${fightId}`);
     
     const fight = await this.prisma.fight.findUnique({
       where: { id: fightId },
@@ -78,8 +92,7 @@ export class FightEngineProcessor implements OnModuleInit, OnModuleDestroy {
     }
 
     const now = new Date();
-    this.logger.log(`[FightEngine] Fight ${fightId} moving to FIGHTING status and simulating`);
-
+    
     // Close betting on smart contract before fight starts
     if (this.escrowService.isConfigured()) {
       try {
@@ -87,7 +100,6 @@ export class FightEngineProcessor implements OnModuleInit, OnModuleDestroy {
         this.logger.log(`✅ Betting closed on contract for fight ${fightId}`);
       } catch (error) {
         this.logger.error(`❌ Failed to close betting on contract for fight ${fightId}:`, error);
-        // Continue anyway - contract has automatic betting window
       }
     }
 
@@ -95,114 +107,204 @@ export class FightEngineProcessor implements OnModuleInit, OnModuleDestroy {
     const fightSeed = this.generateFightSeed(fight.cock1.id, fight.cock2.id, fight.createdAt);
     this.logger.log(`[FightEngine] Using seed ${fightSeed} for fight simulation`);
 
-    // Simulate the fight
-    const simulation = this.simulateFight(fight.cock1, fight.cock2, fightSeed);
-
-    // Save fight results and rounds to database
-    await this.prisma.$transaction(async (tx) => {
-      // Delete any existing rounds
-      await tx.fightRound.deleteMany({ where: { fightId } });
-      
-      // Create new rounds
-      await tx.fightRound.createMany({
-        data: simulation.rounds.map((round) => ({
-          fightId,
-          roundNo: round.roundNo,
-          winnerCock: round.winnerCockId,
-          cock1Health: round.cock1Health,
-          cock2Health: round.cock2Health,
-        })),
-      });
-
-      // Update fight status to FINISHED
-      await tx.fight.update({
-        where: { id: fightId },
-        data: {
-          status: FightStatus.FINISHED,
-          startedAt: now,
-          settledAt: new Date(),
-          winnerCockId: simulation.winnerCockId,
-          metadata: {
-            fightSeed,
-            finalStats: simulation.finalStats,
-          },
+    // Mark fight as FIGHTING (not FINISHED yet!)
+    await this.prisma.fight.update({
+      where: { id: fightId },
+      data: {
+        status: FightStatus.FIGHTING,
+        startedAt: now,
+        metadata: {
+          fightSeed,
         },
-      });
+      },
     });
 
-    this.logger.log(`Fight ${fightId} finished with winner ${simulation.winnerCockId}`);
-
-    // Update cock stats and energy
-    const loserCockId = simulation.winnerCockId === fight.cock1Id ? fight.cock2Id : fight.cock1Id;
-    
-    if (!loserCockId) {
-      this.logger.error(`Cannot determine loser for fight ${fightId}`);
-      return;
+    // ✅ BROADCAST: Fight is starting
+    if (this.gateway) {
+      this.gateway.emitFightStarting(fightId, {
+        cock1Id: fight.cock1.id,
+        cock2Id: fight.cock2.id,
+        fightSeed,
+      });
     }
+
+    try {
+      // Process rounds sequentially in REAL-TIME
+      await this.processRoundsSequentially(fightId, fight.cock1, fight.cock2, fightSeed);
+    } catch (error) {
+      this.logger.error(`Error processing fight ${fightId}:`, error);
+      
+      if (this.gateway) {
+        this.gateway.emitFightError(fightId, { message: 'Fight processing error', code: 'FIGHT_ERROR' });
+      }
+      
+      // Mark fight as cancelled or errored
+      await this.prisma.fight.update({
+        where: { id: fightId },
+        data: { status: FightStatus.CANCELLED },
+      });
+    }
+  }
+
+  /**
+   * Process rounds one by one with delays for animation
+   * ✅ Real-time synchronization: All clients see rounds at the same time
+   */
+  private async processRoundsSequentially(fightId: string, cock1: Cock, cock2: Cock, seed: number) {
+    const seededRandom = createSeededRandom(seed);
     
-    const winnerCock = simulation.winnerCockId === fight.cock1Id ? fight.cock1 : fight.cock2!;
-    const loserCock = loserCockId === fight.cock1Id ? fight.cock1 : fight.cock2!;
+    let cock1Health = 100;
+    let cock2Health = 100;
+    let cock1RoundWins = 0;
+    let cock2RoundWins = 0;
+    let roundNumber = 1;
+    const rounds: any[] = [];
+
+    this.logger.log(`[FightEngine] 🥊 Starting Best-of-3 rounds for fight ${fightId}`);
+
+    // Best of 3: First to 2 wins
+    while (cock1RoundWins < 2 && cock2RoundWins < 2 && roundNumber <= 3) {
+      this.logger.log(`[FightEngine] ⚔️  Processing Round ${roundNumber}`);
+
+      // ✅ BROADCAST: Round starting
+      if (this.gateway) {
+        this.gateway.emitRoundStart(fightId, { roundNumber });
+      }
+
+      // Wait 3 seconds for countdown animation
+      await this.delay(3000);
+
+      // Simulate this round
+      const roundResult = this.simulateRound(cock1, cock2, cock1Health, cock2Health, seededRandom);
+      
+      cock1Health = roundResult.cock1Health;
+      cock2Health = roundResult.cock2Health;
+      
+      const roundWinnerId = cock1Health > cock2Health ? cock1.id : cock2.id;
+      
+      if (roundWinnerId === cock1.id) {
+        cock1RoundWins++;
+      } else {
+        cock2RoundWins++;
+      }
+
+      const roundData = {
+        roundNo: roundNumber,
+        winnerCockId: roundWinnerId,
+        cock1Health,
+        cock2Health,
+      };
+
+      rounds.push(roundData);
+
+      // Save round to database immediately
+      await this.prisma.fightRound.create({
+        data: {
+          fightId,
+          ...roundData,
+        },
+      });
+
+      // ✅ BROADCAST: Round complete - ALL clients animate this simultaneously
+      if (this.gateway) {
+        this.gateway.emitRoundComplete(fightId, {
+          roundNumber,
+          winnerId: roundWinnerId,
+          cock1Health,
+          cock2Health,
+          cock1Damage: 100 - cock1Health,
+          cock2Damage: 100 - cock2Health,
+        });
+      }
+
+      this.logger.log(`[FightEngine] ✅ Round ${roundNumber} complete - Winner: ${roundWinnerId} (${cock1RoundWins}-${cock2RoundWins})`);
+
+      // Wait 25 seconds for frontend animation to complete
+      await this.delay(25000);
+
+      // Reset health for next round (unless fight is over)
+      if (cock1RoundWins < 2 && cock2RoundWins < 2) {
+        cock1Health = 100;
+        cock2Health = 100;
+        roundNumber++;
+      }
+    }
+
+    // Determine overall winner
+    const overallWinnerId = cock1RoundWins > cock2RoundWins ? cock1.id : cock2.id;
+
+    this.logger.log(`[FightEngine] 🏆 Fight complete! Winner: ${overallWinnerId} (${cock1RoundWins}-${cock2RoundWins})`);
+
+    // ✅ BROADCAST: Fight finished
+    if (this.gateway) {
+      this.gateway.emitFightFinished(fightId, {
+        winnerId: overallWinnerId,
+        cock1RoundWins,
+        cock2RoundWins,
+        totalRounds: rounds.length,
+      });
+    }
+
+    // Wait 3 seconds for celebration animation
+    await this.delay(3000);
+
+    // NOW mark as finished and credit winner
+    await this.finalizeFight(fightId, overallWinnerId, cock1, cock2, rounds);
+  }
+
+  /**
+   * Finalize fight: Mark as FINISHED, update stats, credit winner
+   */
+  private async finalizeFight(fightId: string, winnerId: string, cock1: Cock, cock2: Cock, rounds: any[]) {
+    this.logger.log(`[FightEngine] 💰 Finalizing fight ${fightId} - Crediting winner ${winnerId}`);
+
+    const fight = await this.prisma.fight.findUnique({
+      where: { id: fightId },
+      include: { spectatorBets: true },
+    });
+
+    if (!fight) return;
+
+    const loserCockId = winnerId === cock1.id ? cock2.id : cock1.id;
+    
+    const winnerCock = winnerId === cock1.id ? cock1 : cock2;
+    const loserCock = loserCockId === cock1.id ? cock1 : cock2;
 
     await this.prisma.$transaction(async (tx) => {
       // Calculate winner earnings (wager from fight)
       const wagerAmount = parseFloat(fight.wager.toString());
       // ✅ FIX: Winner earns opponent's wager (net profit), not total pot
-      // Winner gets their wager back + opponent's wager = net profit is just opponent's wager
       const netWinnings = wagerAmount; // Just the opponent's wager (net profit)
+      
+      // Calculate energy/health loss based on rounds fought
+      const numRounds = rounds.length;
+      const energyCost = Math.min(winnerCock.energy, numRounds * 10); // 10 energy per round
+      const healthCost = Math.min(winnerCock.health, numRounds * 5); // 5 health per round
       
       // Update winner stats
       await tx.cock.update({
-        where: { id: simulation.winnerCockId },
+        where: { id: winnerId },
         data: {
           wins: { increment: 1 },
           earningsCfc: { increment: netWinnings },
-          energy: Math.max(
-            0,
-            Math.min(
-              winnerCock.maxEnergy,
-              simulation.winnerCockId === fight.cock1Id
-                ? simulation.finalStats.cock1Energy
-                : simulation.finalStats.cock2Energy,
-            ),
-          ),
-          health: Math.max(
-            0,
-            Math.min(
-              100,
-              simulation.winnerCockId === fight.cock1Id
-                ? simulation.finalStats.cock1Health
-                : simulation.finalStats.cock2Health,
-            ),
-          ),
+          energy: Math.max(0, winnerCock.energy - energyCost),
+          health: Math.max(0, winnerCock.health - healthCost),
           lastRecoveryAt: new Date(),
           energyUpdatedAt: new Date(),
           healthUpdatedAt: new Date(),
         },
       });
 
-      // Update loser stats
+      // Update loser stats (more energy/health loss)
+      const loserEnergyCost = Math.min(loserCock.energy, numRounds * 15); // 15 energy per round (loser loses more)
+      const loserHealthCost = Math.min(loserCock.health, numRounds * 10); // 10 health per round
+      
       await tx.cock.update({
         where: { id: loserCockId },
         data: {
           losses: { increment: 1 },
-          energy: Math.max(
-            0,
-            Math.min(
-              loserCock.maxEnergy,
-              loserCockId === fight.cock1Id
-                ? simulation.finalStats.cock1Energy
-                : simulation.finalStats.cock2Energy,
-            ),
-          ),
-          health: Math.max(
-            0,
-            Math.min(
-              100,
-              loserCockId === fight.cock1Id
-                ? simulation.finalStats.cock1Health
-                : simulation.finalStats.cock2Health,
-            ),
-          ),
+          energy: Math.max(0, loserCock.energy - loserEnergyCost),
+          health: Math.max(0, loserCock.health - loserHealthCost),
           lastRecoveryAt: new Date(),
           energyUpdatedAt: new Date(),
           healthUpdatedAt: new Date(),
@@ -214,7 +316,7 @@ export class FightEngineProcessor implements OnModuleInit, OnModuleDestroy {
         await tx.spectatorBet.updateMany({
           where: {
             fightId,
-            cockId: simulation.winnerCockId,
+            cockId: winnerId,
           },
           data: {
             status: SpectatorBetStatus.WON,
@@ -224,13 +326,23 @@ export class FightEngineProcessor implements OnModuleInit, OnModuleDestroy {
         await tx.spectatorBet.updateMany({
           where: {
             fightId,
-            cockId: { not: simulation.winnerCockId },
+            cockId: { not: winnerId },
           },
           data: {
             status: SpectatorBetStatus.LOST,
           },
         });
       }
+
+      // ✅ NOW mark fight as FINISHED in database
+      await tx.fight.update({
+        where: { id: fightId },
+        data: {
+          status: FightStatus.FINISHED,
+          settledAt: new Date(),
+          winnerCockId: winnerId,
+        },
+      });
     });
 
     this.logger.log(`Fight ${fightId} payouts processed successfully`);
@@ -276,6 +388,60 @@ export class FightEngineProcessor implements OnModuleInit, OnModuleDestroy {
     } else {
       this.logger.warn(`⚠️  Escrow contract not configured - skipping on-chain result submission for fight ${fightId}`);
     }
+  }
+
+  /**
+   * Helper: Delay execution for animation synchronization
+   */
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Simulate a single round
+   */
+  private simulateRound(
+    cock1: Cock,
+    cock2: Cock,
+    initialCock1Health: number,
+    initialCock2Health: number,
+    seededRandom: SeededRandom,
+  ): { cock1Health: number; cock2Health: number } {
+    let cock1Health = initialCock1Health;
+    let cock2Health = initialCock2Health;
+
+    // Battle for 10 turns or until one reaches 0 HP
+    for (let turn = 1; turn <= 10; turn++) {
+      const turnPriority = calculateTurnPriority(cock1, cock2, seededRandom);
+      
+      if (turnPriority === 1) {
+        // Cock1 attacks
+        const damage = calculateDamage(cock1, cock2, seededRandom);
+        cock2Health = Math.max(0, cock2Health - damage);
+        
+        if (cock2Health <= 0) break;
+        
+        // Cock2 counter-attacks
+        const counterDamage = calculateDamage(cock2, cock1, seededRandom);
+        cock1Health = Math.max(0, cock1Health - counterDamage);
+        
+        if (cock1Health <= 0) break;
+      } else {
+        // Cock2 attacks
+        const damage = calculateDamage(cock2, cock1, seededRandom);
+        cock1Health = Math.max(0, cock1Health - damage);
+        
+        if (cock1Health <= 0) break;
+        
+        // Cock1 counter-attacks
+        const counterDamage = calculateDamage(cock1, cock2, seededRandom);
+        cock2Health = Math.max(0, cock2Health - counterDamage);
+        
+        if (cock2Health <= 0) break;
+      }
+    }
+
+    return { cock1Health, cock2Health };
   }
 
   private generateFightSeed(cock1Id: string, cock2Id: string, createdAt: Date): number {

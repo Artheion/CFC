@@ -221,7 +221,10 @@ export function mapActiveFight(fight: BackendFight): ActiveFight {
       ? mapCock(fight.cock2, fight.cock2.owner?.username ?? undefined)
       : undefined,
     wager: parseFloat(fight.wager),
-    status: fight.status === 'BETTING' ? 'betting' : fight.status === 'FINISHED' ? 'finished' : 'fighting',
+    status: fight.status === 'BETTING' ? 'betting' 
+          : fight.status === 'FIGHTING' ? 'fighting'
+          : fight.status === 'FINISHED' ? 'finished' 
+          : 'fighting',
     rounds:
       fight.rounds?.map((round) => ({
         roundNumber: round.roundNo,
