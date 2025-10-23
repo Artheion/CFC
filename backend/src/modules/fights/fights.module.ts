@@ -23,6 +23,7 @@ export class FightsModule implements OnModuleInit {
     private readonly fightEngineProcessor: FightEngineProcessor,
     private readonly fightsGateway: FightsGateway,
   ) {
+    console.log('[FightsModule] 🏗️  FightsModule constructor called');
     this.logger.log('🏗️  FightsModule constructor called');
   }
 
@@ -31,9 +32,12 @@ export class FightsModule implements OnModuleInit {
    * This avoids circular dependency issues
    */
   onModuleInit() {
+    console.log('[FightsModule] 🚀 FightsModule.onModuleInit() called');
     this.logger.log('🚀 FightsModule.onModuleInit() called');
+    console.log('[FightsModule] 📡 Injecting gateway into FightEngineProcessor...');
     this.logger.log('📡 Injecting gateway into FightEngineProcessor...');
     this.fightEngineProcessor.setGateway(this.fightsGateway);
+    console.log('[FightsModule] ✅ FightsModule initialization complete');
     this.logger.log('✅ FightsModule initialization complete');
   }
 }
