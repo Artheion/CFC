@@ -469,7 +469,7 @@ const Hub = () => {
                   className={`group relative cursor-grab overflow-hidden rounded border border-white/10 bg-black/40 transition-colors active:cursor-grabbing ${draggedItem === item.id ? 'border-primary/60 bg-primary/10' : ''}`}
                 >
                   <div className="aspect-square w-full p-1">
-                    <img src={item.image} alt={item.name} className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-105" />
+                    <img src={item.image} alt={item.name} className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-105" loading="lazy" />
                   </div>
                   <div className="absolute bottom-0.5 right-0.5 rounded-full bg-black/70 px-1.5 py-0.5 text-xs font-bold text-white">
                     x{item.count}
@@ -498,7 +498,7 @@ const Hub = () => {
                   className="group relative cursor-grab overflow-hidden rounded border border-white/10 bg-gradient-to-br from-primary/20 to-primary/10 active:cursor-grabbing"
                 >
                   <div className="aspect-square w-full p-0.5">
-                    <img src="/assets/Items/Egg.png" alt="Egg" className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-110" />
+                    <img src="/assets/Items/Egg.png" alt="Egg" className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-110" loading="lazy" />
                   </div>
                 </div>
               ))}
@@ -523,7 +523,7 @@ const Hub = () => {
                   {incubatingEgg ? (
                     <>
                       <div className="group relative h-16 w-16 flex-shrink-0 overflow-hidden rounded border border-white/10 bg-gradient-to-br from-primary/30 to-primary/20 p-1">
-                        <img src="/assets/Items/Egg.png" alt="Incubating Egg" className="h-full w-full object-contain" />
+                        <img src="/assets/Items/Egg.png" alt="Incubating Egg" className="h-full w-full object-contain" loading="lazy" />
                       </div>
                       <p className="text-xl font-bold text-primary">{formatTime(getRemainingTime())}</p>
                     </>

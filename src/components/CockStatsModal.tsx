@@ -147,7 +147,7 @@ const CockStatsModal = ({ cock, onClose, showHealthBars = true, allowEdit = fals
               {...holographic}
               className={`relative h-56 w-56 flex-shrink-0 overflow-hidden border-4 ${rarityColor}`}
             >
-              <img src={cockImage} alt={`${latestCock.name} portrait`} className="h-full w-full object-cover" />
+              <img src={cockImage} alt={`${latestCock.name} portrait`} className="h-full w-full object-cover" loading="lazy" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-transparent" />
             </HolographicCard>
 

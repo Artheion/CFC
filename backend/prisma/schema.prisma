@@ -173,6 +173,8 @@ model InventoryItem {
   itemCatalog   ItemCatalog @relation(fields: [itemCatalogId], references: [id])
 
   @@unique([userId, itemCatalogId])
+  @@index([userId])           // ✅ PERFORMANCE: User inventory lookup (Phase 1)
+  @@index([itemCatalogId])    // ✅ PERFORMANCE: Item catalog lookup (Phase 1)
 }
 
 model BreedingSession {
@@ -227,6 +229,9 @@ model Fight {
 
   @@index([status])
   @@index([createdAt])
+  @@index([status, createdAt]) // ✅ PERFORMANCE: Composite index for fight queries (Phase 1)
+  @@index([cock1Id, status])   // ✅ PERFORMANCE: User's cock fights lookup (Phase 1)
+  @@index([cock2Id, status])   // ✅ PERFORMANCE: User's cock fights lookup (Phase 1)
 }
 
 model FightRound {
@@ -274,6 +279,8 @@ model WheelSpin {
   updatedAt         DateTime        @updatedAt
   transactions      Transaction[]
   user              User            @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt]) // ✅ PERFORMANCE: User wheel spin history (Phase 1)
 }
 
 model Transaction {
@@ -303,6 +310,9 @@ model Transaction {
   @@index([toWallet])
   @@index([status])
   @@index([type])
+  @@index([fromUserId, status, createdAt]) // ✅ PERFORMANCE: User transaction history (Phase 1)
+  @@index([toUserId, status, createdAt])   // ✅ PERFORMANCE: User incoming transactions (Phase 1)
+  @@index([fightId])                       // ✅ PERFORMANCE: Fight transactions lookup (Phase 1)
 }
 
 model AppConfig {

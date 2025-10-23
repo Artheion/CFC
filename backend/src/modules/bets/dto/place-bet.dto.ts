@@ -13,8 +13,8 @@ export class PlaceBetDto {
 
   @IsString({ message: 'Payment signature must be a string' })
   @IsNotEmpty({ message: 'Payment signature is required for on-chain verification' })
-  @Matches(/^0x[a-fA-F0-9]{130}$/, {
-    message: 'Payment signature must be a valid Ethereum signature',
+  @Matches(/^0x[a-fA-F0-9]{64}$/, {
+    message: 'Payment signature must be a valid transaction hash (0x + 64 hex characters)',
   })
-  paymentSignature!: string;
+  paymentSignature!: string; // Transaction hash from CFC token transfer
 }

@@ -705,7 +705,7 @@ const Shop = () => {
                       style={{ width: `${SPIN_ITEM_WIDTH}px` }}
                     >
                       <div className="relative mb-3 h-28 w-full overflow-hidden border border-white/10">
-                        <img src={image} alt={`${rarityLabels[item.rarity]} cock`} className="h-full w-full object-cover" />
+                        <img src={image} alt={`${rarityLabels[item.rarity]} cock`} className="h-full w-full object-cover" loading="lazy" />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
                       </div>
                       <span className={`text-sm font-bold uppercase tracking-wide ${rarityAccent[item.rarity]}`}>
@@ -788,7 +788,7 @@ const Shop = () => {
             return (
               <div key={itemKey} className="flex flex-col items-center gap-3 text-center">
                 <div className="h-32 w-32 rounded-lg border border-white/10 bg-black/40 p-2">
-                  <img src={imageSrc} alt={displayName} className="h-full w-full object-contain" />
+                  <img src={imageSrc} alt={displayName} className="h-full w-full object-contain" loading="lazy" />
                 </div>
                 <div className="flex flex-col">
                   <p className="font-bold text-white">{displayName}</p>
@@ -867,7 +867,7 @@ const Shop = () => {
               {...getCockHolographicConfig(lastResult.rarity)}
               className={`relative mb-5 aspect-square w-full overflow-hidden border border-white/10 ${rarityGlow[lastResult.rarity]} shadow-inner`}
             >
-              <img src={getCockImage(lastResult.image)} alt={`${lastResult.name} portrait`} className="h-full w-full object-cover" />
+              <img src={getCockImage(lastResult.image)} alt={`${lastResult.name} portrait`} className="h-full w-full object-cover" loading="lazy" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent" />
             </HolographicCard>
 
