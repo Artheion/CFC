@@ -52,9 +52,14 @@ import { BreedingModule } from './modules/breeding/breeding.module';
     }),
     ThrottlerModule.forRoot([
       {
+        name: 'short',
+        ttl: 10000, // 10 seconds
+        limit: 50, // 50 requests per 10 seconds (for burst protection)
+      },
+      {
         name: 'default',
         ttl: 60000, // 1 minute in milliseconds
-        limit: 30, // 30 requests per minute (reduced from 120)
+        limit: 200, // 200 requests per minute (allows ~15 refreshes)
       },
       {
         name: 'auth',
