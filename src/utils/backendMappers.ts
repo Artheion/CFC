@@ -57,10 +57,6 @@ export function mapUser(user: BackendUser): User {
 }
 
 export function mapCock(cock: BackendCock, ownerUsername?: string): Cock {
-  console.log('[mapCock] Backend cock:', JSON.stringify(cock, null, 2));
-  console.log('[mapCock] earningsCfc value:', cock.earningsCfc);
-  console.log('[mapCock] earningsCfc type:', typeof cock.earningsCfc);
-  
   const stats = {
     attack: cock.attack,
     defence: cock.defence,
