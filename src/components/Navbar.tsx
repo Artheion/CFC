@@ -146,6 +146,12 @@ const Navbar = () => {
       };
     };
 
+    // Call authenticate if backend is enabled
+    if (BACKEND_ENABLED) {
+      authenticate();
+      return;
+    }
+
     // Offline/testing fallback without backend
     if (!user && provider && isCorrectNetwork) {
       let cancelled = false;
