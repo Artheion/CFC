@@ -517,7 +517,19 @@ const Shop = () => {
       return;
     }
 
+    // ✅ Ensure wallet is connected for CFC token purchases
+    if (!provider || !address) {
+      setError('Please connect your wallet to make purchases.');
+      return;
+    }
+
     const totalCost = price * quantity;
+    
+    // ✅ Check balance before attempting purchase
+    if (cfcBalance < totalCost) {
+      setError(`Insufficient $CFC balance. You need ${formatCFC(totalCost)} $CFC but only have ${formatCFC(cfcBalance)} $CFC.`);
+      return;
+    }
     
     if (BACKEND_ENABLED && provider) {
       try {
@@ -584,19 +596,10 @@ const Shop = () => {
         return;
       }
     }
-    if (cfcBalance < totalCost) {
-      setError(`Insufficient $CFC balance. You need ${formatCFC(totalCost)} $CFC.`);
-      return;
-    }
-
-    const success = await buyShopItem(itemKey, quantity);
-    if (success) {
-      updateBNBBalance(-totalCost);
-      setError(null);
-      setRewardMessage(`Added ${quantity}× ${itemName} to your inventory.`);
-    } else {
-      setError('Unable to add item to inventory.');
-    }
+    
+    // ✅ If we reach here, either backend is not enabled or provider is missing
+    // In production, this should never happen as CFC purchases require token transfer
+    setError('Unable to process purchase. Please make sure your wallet is connected.');
   };
 
   // Handle network mismatch

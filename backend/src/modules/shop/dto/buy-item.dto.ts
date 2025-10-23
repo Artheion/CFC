@@ -19,5 +19,5 @@ export class BuyItemDto {
   @Matches(/^0x[a-fA-F0-9]{130}$/, {
     message: 'Payment signature must be a valid Ethereum signature',
   })
-  paymentSignature!: string;
+  paymentSignature!: string; // Payment signature is REQUIRED for CFC purchases
 }
