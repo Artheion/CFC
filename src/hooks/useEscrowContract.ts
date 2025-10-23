@@ -80,8 +80,24 @@ export const useEscrowContract = () => {
     }
 
     // walletProvider from WalletContext is already a BrowserProvider, so we can use it directly
-    const signer = await walletProvider.getSigner();
-    console.log('[getContracts] Signer obtained:', await signer.getAddress());
+    let signer;
+    try {
+      signer = await walletProvider.getSigner();
+      const signerAddress = await signer.getAddress();
+      console.log('[getContracts] Signer obtained:', signerAddress);
+      
+      // Verify signer address matches connected wallet
+      if (signerAddress.toLowerCase() !== address.toLowerCase()) {
+        console.warn('[getContracts] ⚠️  Signer address mismatch!', {
+          signerAddress,
+          expectedAddress: address,
+        });
+        throw new Error('Signer address does not match connected wallet. Try disconnecting and reconnecting.');
+      }
+    } catch (err: any) {
+      console.error('[getContracts] Failed to get signer:', err);
+      throw new Error(`Failed to get wallet signer: ${err.message}. Please ensure your wallet is properly connected and unlocked.`);
+    }
 
     // Verify network
     const network = await walletProvider.getNetwork();
@@ -165,72 +181,118 @@ export const useEscrowContract = () => {
   }, [getContracts, address]);
 
   /**
-   * Approve CFC tokens to escrow contract
+   * Approve CFC tokens to escrow contract with automatic retry on RPC errors
    * @param skipLoadingManagement - If true, won't manage loading state (used when called from createMatch/joinMatch)
    */
   const approveTokens = useCallback(async (amount: string, skipLoadingManagement = false): Promise<{ success: boolean; txHash?: string }> => {
-    try {
-      if (!skipLoadingManagement) {
-        setLoading(true);
-      }
-      setError(null);
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY = 3000; // 3 seconds
+    
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        if (!skipLoadingManagement && attempt === 1) {
+          setLoading(true);
+        }
+        setError(null);
 
-      const { tokenContract } = await getContracts();
-      const amountWei = parseUnits(amount, 18);
+        const { tokenContract } = await getContracts();
+        const amountWei = parseUnits(amount, 18);
 
-      console.log(`Approving ${amount} CFC tokens to escrow contract...`);
-      console.log(`Token contract: ${CFC_TOKEN_ADDRESS}`);
-      console.log(`Escrow contract: ${ESCROW_CONTRACT_ADDRESS}`);
-      console.log(`Amount: ${amountWei.toString()} wei`);
-      
-      // Verify addresses are different
-      if (!CFC_TOKEN_ADDRESS || !ESCROW_CONTRACT_ADDRESS) {
-        throw new Error('Contract addresses not configured. Check environment variables.');
-      }
-      if (CFC_TOKEN_ADDRESS.toLowerCase() === ESCROW_CONTRACT_ADDRESS.toLowerCase()) {
-        throw new Error('Token and Escrow addresses are the same! Check environment variables.');
-      }
-      
-      const tx = await tokenContract.approve(ESCROW_CONTRACT_ADDRESS, amountWei);
-      console.log('✅ Approval transaction sent:', tx.hash);
-      
-      await tx.wait();
-      console.log('✅ Approval confirmed!');
-      
-      return { success: true, txHash: tx.hash };
-    } catch (err: any) {
-      console.error('❌ Approval error:', err);
-      console.error('❌ Error code:', err.code);
-      console.error('❌ Error message:', err.message);
-      console.error('❌ Error details:', err.details);
-      
-      let message = 'Failed to approve tokens';
-      
-      // Detect specific error types
-      if (err.code === 'ACTION_REJECTED' || err.message?.toLowerCase().includes('user rejected')) {
-        message = 'Transaction was rejected by user';
-      } else if (err.code === -32603 || err.message?.includes('internal error') || err.message?.includes('does not have a transaction hash')) {
-        message = 'RPC connection error. Please try again in a few moments, or switch to a different RPC endpoint in MetaMask.\n\nSuggested RPCs for BSC Mainnet:\n• https://rpc.ankr.com/bsc\n• https://bsc-dataseed.bnbchain.org\n• https://bsc.meowrpc.com';
-      } else if (err.message?.includes('insufficient funds')) {
-        message = 'Insufficient BNB for gas fees. You need BNB in your wallet to pay for transaction fees.';
-      } else if (err.message?.includes('nonce')) {
-        message = 'Nonce error. Please reset your MetaMask account (Settings > Advanced > Clear activity tab data) and try again.';
-      } else if (err.message?.includes('timeout') || err.message?.includes('timed out')) {
-        message = 'Transaction timeout. The RPC endpoint is too slow. Please try again or switch RPC in MetaMask.';
-      } else if (err.message?.includes('network') || err.message?.includes('connection')) {
-        message = 'Network connection issue. Please check your internet connection and try again.';
-      } else if (err.message) {
-        message = err.message;
-      }
-      
-      console.error('❌ User-friendly error message:', message);
-      setError(message);
-      return { success: false };
-    } finally {
-      if (!skipLoadingManagement) {
-        setLoading(false);
+        if (attempt > 1) {
+          console.log(`🔄 Retry attempt ${attempt}/${MAX_RETRIES} for token approval...`);
+        } else {
+          console.log(`Approving ${amount} CFC tokens to escrow contract...`);
+        }
+        console.log(`Token contract: ${CFC_TOKEN_ADDRESS}`);
+        console.log(`Escrow contract: ${ESCROW_CONTRACT_ADDRESS}`);
+        console.log(`Amount: ${amountWei.toString()} wei`);
+        
+        // Verify addresses are different
+        if (!CFC_TOKEN_ADDRESS || !ESCROW_CONTRACT_ADDRESS) {
+          throw new Error('Contract addresses not configured. Check environment variables.');
+        }
+        if (CFC_TOKEN_ADDRESS.toLowerCase() === ESCROW_CONTRACT_ADDRESS.toLowerCase()) {
+          throw new Error('Token and Escrow addresses are the same! Check environment variables.');
+        }
+        
+        // Send approval transaction with explicit gas estimation
+        console.log('[approveTokens] Estimating gas...');
+        let gasLimit;
+        try {
+          gasLimit = await tokenContract.approve.estimateGas(ESCROW_CONTRACT_ADDRESS, amountWei);
+          console.log('[approveTokens] Gas estimated:', gasLimit.toString());
+        } catch (gasErr: any) {
+          console.warn('[approveTokens] Gas estimation failed, using fallback:', gasErr.message);
+          gasLimit = 100000n; // Fallback gas limit for approve
+        }
+        
+        const tx = await tokenContract.approve(ESCROW_CONTRACT_ADDRESS, amountWei, {
+          gasLimit: gasLimit,
+        });
+        console.log('✅ Approval transaction sent:', tx.hash);
+        
+        await tx.wait();
+        console.log('✅ Approval confirmed!');
+        
+        return { success: true, txHash: tx.hash };
+      } catch (err: any) {
+        const isRpcError = err.code === -32603 || 
+                          err.code === 'UNKNOWN_ERROR' ||
+                          err.message?.includes('internal error') || 
+                          err.message?.includes('does not have a transaction hash') ||
+                          err.message?.includes('could not coalesce error');
+        
+        const isUserRejection = err.code === 'ACTION_REJECTED' || err.message?.toLowerCase().includes('user rejected');
+        
+        // Don't retry on user rejection
+        if (isUserRejection) {
+          console.error('❌ Transaction rejected by user');
+          setError('Transaction was rejected by user');
+          return { success: false };
+        }
+        
+        // Retry on RPC errors
+        if (isRpcError && attempt < MAX_RETRIES) {
+          console.warn(`⚠️  RPC error on attempt ${attempt}/${MAX_RETRIES}. Retrying in ${RETRY_DELAY/1000}s...`);
+          console.warn('Error details:', err.message);
+          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+          continue; // Retry
+        }
+        
+        // All retries exhausted or non-retriable error
+        console.error(`❌ Approval error (attempt ${attempt}/${MAX_RETRIES}):`, err);
+        console.error('❌ Error code:', err.code);
+        console.error('❌ Error message:', err.message);
+        
+        let message = 'Failed to approve tokens';
+        
+        // Detect specific error types
+        if (isRpcError) {
+          message = `RPC connection error after ${MAX_RETRIES} attempts. The BSC Mainnet RPC is unstable.\n\nPlease try:\n1. Wait a moment and try again\n2. Switch to a more reliable RPC in MetaMask:\n   • https://rpc.ankr.com/bsc\n   • https://bsc.meowrpc.com\n   • https://bsc-dataseed.bnbchain.org`;
+        } else if (err.message?.includes('insufficient funds')) {
+          message = 'Insufficient BNB for gas fees. You need BNB in your wallet to pay for transaction fees.';
+        } else if (err.message?.includes('nonce')) {
+          message = 'Nonce error. Please reset your MetaMask account (Settings > Advanced > Clear activity tab data) and try again.';
+        } else if (err.message?.includes('timeout') || err.message?.includes('timed out')) {
+          message = 'Transaction timeout. The RPC endpoint is too slow. Please try again or switch RPC in MetaMask.';
+        } else if (err.message?.includes('network') || err.message?.includes('connection')) {
+          message = 'Network connection issue. Please check your internet connection and try again.';
+        } else if (err.message) {
+          message = err.message;
+        }
+        
+        console.error('❌ User-friendly error message:', message);
+        setError(message);
+        return { success: false };
+      } finally {
+        if (!skipLoadingManagement && attempt === MAX_RETRIES) {
+          setLoading(false);
+        }
       }
     }
+    
+    // Should never reach here but TypeScript needs it
+    return { success: false };
   }, [getContracts]);
 
   /**

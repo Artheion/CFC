@@ -51,7 +51,14 @@ const walletClientToBrowserProvider = (walletClient: ReturnType<typeof useWallet
     eip1193Provider.removeListener = () => {};
   }
 
-  return new BrowserProvider(eip1193Provider, (walletClient as any)?.chain?.id);
+  // IMPORTANT: Don't pass chainId to BrowserProvider - let it detect automatically
+  // Passing incorrect chainId causes transaction signing issues
+  const provider = new BrowserProvider(eip1193Provider);
+  console.log('[walletClientToBrowserProvider] Created BrowserProvider', {
+    hasTransport: !!walletClient.transport,
+    chainId: (walletClient as any)?.chain?.id,
+  });
+  return provider;
 };
 
 export const WalletProvider = ({ children }: WalletProviderProps) => {

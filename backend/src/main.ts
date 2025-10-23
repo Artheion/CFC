@@ -9,9 +9,18 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { LoggerService } from './infra/logger/logger.service';
 
 async function bootstrap() {
+  console.log('🚀 ===============================================');
+  console.log('🚀 STARTING CFC BACKEND APPLICATION');
+  console.log('🚀 Node version:', process.version);
+  console.log('🚀 Environment:', process.env.NODE_ENV);
+  console.log('🚀 Redis URL configured:', !!process.env.REDIS_URL);
+  console.log('🚀 ===============================================');
+  
   const app = await NestFactory.create(AppModule, {
     bufferLogs: true,
   });
+  
+  console.log('✅ NestJS application created successfully');
 
   const configService = app.get(ConfigService);
   const reflector = app.get(Reflector);
