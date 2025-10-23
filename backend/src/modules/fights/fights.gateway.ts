@@ -24,7 +24,25 @@ import { JwtService } from '@nestjs/jwt';
  */
 @WebSocketGateway({
   cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: (origin, callback) => {
+      // Allow all origins in development, specific origins in production
+      const allowedOrigins = process.env.FRONTEND_URL 
+        ? process.env.FRONTEND_URL.split(',').map(o => o.trim())
+        : ['http://localhost:3000', 'http://localhost:5173'];
+      
+      // In development, allow all origins
+      if (process.env.NODE_ENV !== 'production') {
+        callback(null, true);
+        return;
+      }
+      
+      // In production, check against allowed origins
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     credentials: true,
   },
   namespace: '/fights', // Separate namespace for fight events
@@ -40,6 +58,8 @@ export class FightsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
 
   afterInit(server: Server) {
     this.logger.log('✅ WebSocket Gateway initialized for real-time fights');
+    this.logger.log(`🌐 CORS configured for: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`);
+    this.logger.log(`🔊 Listening on namespace: /fights`);
   }
 
   /**
@@ -48,6 +68,10 @@ export class FightsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
    */
   async handleConnection(client: Socket) {
     try {
+      this.logger.log(`[Connection] Client attempting to connect: ${client.id}`);
+      this.logger.log(`[Connection] Origin: ${client.handshake.headers.origin || 'unknown'}`);
+      this.logger.log(`[Connection] Transports: ${client.conn.transport.name}`);
+      
       // Extract token from handshake (query params or headers)
       const token = client.handshake.auth?.token || client.handshake.headers?.authorization?.replace('Bearer ', '');
       
@@ -56,16 +80,19 @@ export class FightsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
           const payload = this.jwtService.verify(token);
           client.data.userId = payload.userId;
           client.data.walletAddress = payload.walletAddress;
-          this.logger.log(`Client connected: ${client.id} (User: ${payload.walletAddress})`);
+          this.logger.log(`✅ Client authenticated: ${client.id} (User: ${payload.walletAddress})`);
         } catch (error) {
-          this.logger.warn(`Invalid token on connection: ${client.id}`);
+          this.logger.warn(`⚠️  Invalid token on connection: ${client.id}`);
+          // Still allow connection for anonymous spectating
         }
       } else {
         // Allow anonymous spectators
-        this.logger.log(`Anonymous client connected: ${client.id}`);
+        this.logger.log(`👤 Anonymous client connected: ${client.id}`);
       }
+      
+      this.logger.log(`✅ Client connected successfully: ${client.id}`);
     } catch (error) {
-      this.logger.error(`Connection error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      this.logger.error(`❌ Connection error for ${client.id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -88,13 +115,18 @@ export class FightsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
   ) {
     const { fightId } = data;
     
+    this.logger.log(`[Room Join] Client ${client.id} joining fight: ${fightId}`);
+    
     // Join the fight room
     client.join(`fight:${fightId}`);
     
-    this.logger.log(`Client ${client.id} joined fight room: ${fightId}`);
+    this.logger.log(`✅ Client ${client.id} successfully joined fight room: ${fightId}`);
     
     // Send acknowledgment
     client.emit('fight-joined', { fightId, success: true });
+    
+    // Broadcast spectator count update
+    this.emitSpectatorCount(fightId);
     
     return { success: true, fightId };
   }

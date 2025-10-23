@@ -56,10 +56,19 @@ export const useFightWebSocket = (fightId: string | undefined) => {
   useEffect(() => {
     if (!fightId) return;
 
+    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
     console.log(`[WebSocket] Connecting to fight: ${fightId}`);
+    console.log(`[WebSocket] API Base URL: ${apiBaseUrl}`);
+    console.log(`[WebSocket] Full URL: ${apiBaseUrl}/fights`);
+    
+    if (!apiBaseUrl) {
+      console.error('[WebSocket] ❌ VITE_API_BASE_URL is not set! WebSocket cannot connect.');
+      setError('API URL not configured');
+      return;
+    }
 
     // Connect to WebSocket namespace
-    const socket = io(`${import.meta.env.VITE_API_BASE_URL}/fights`, {
+    const socket = io(`${apiBaseUrl}/fights`, {
       transports: ['websocket', 'polling'],
       auth: {
         token: localStorage.getItem('cfc.accessToken'), // JWT auth

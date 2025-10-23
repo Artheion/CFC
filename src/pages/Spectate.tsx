@@ -31,6 +31,18 @@ const Spectate = () => {
   // ✅ REAL-TIME: Connect to WebSocket for synchronized fight updates
   const { isConnected, fightStarting, roundStart, roundComplete, fightFinished, error: wsError } = useFightWebSocket(fightId);
   
+  // 🐛 DEBUG: Show WebSocket connection status
+  useEffect(() => {
+    console.log('[Spectate] WebSocket connection status:', { 
+      isConnected, 
+      hasStartingEvent: !!fightStarting,
+      hasRoundStart: !!roundStart,
+      hasRoundComplete: !!roundComplete,
+      hasFinished: !!fightFinished,
+      error: wsError,
+    });
+  }, [isConnected, fightStarting, roundStart, roundComplete, fightFinished, wsError]);
+  
   const [selectedWinner, setSelectedWinner] = useState<string>('');
   const [betAmount, setBetAmount] = useState('');
   const [currentTime, setCurrentTime] = useState(Date.now());
@@ -378,13 +390,23 @@ const Spectate = () => {
       {/* Fight Info Header */}
       <div className="border-b border-white/10 bg-background-dark/80 px-4 py-6 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">
-          <button 
-            onClick={() => navigate('/arena')}
-            className="mb-4 flex items-center gap-2 text-white/60 hover:text-white transition-colors"
-          >
-            <span>←</span>
-            <span>{t('spectate.backToArena')}</span>
-          </button>
+          <div className="flex items-center justify-between mb-4">
+            <button 
+              onClick={() => navigate('/arena')}
+              className="flex items-center gap-2 text-white/60 hover:text-white transition-colors"
+            >
+              <span>←</span>
+              <span>{t('spectate.backToArena')}</span>
+            </button>
+            
+            {/* 🐛 DEBUG: WebSocket Connection Status */}
+            <div className={`flex items-center gap-2 px-3 py-1 rounded text-xs font-medium ${
+              isConnected ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'
+            }`}>
+              <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400' : 'bg-yellow-400 animate-pulse'}`} />
+              {isConnected ? 'Live Connected' : 'Connecting...'}
+            </div>
+          </div>
           
           <div className="flex items-start justify-between gap-8">
             {/* Cock 1 */}
