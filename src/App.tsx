@@ -19,6 +19,7 @@ const Arena = lazy(() => import('./pages/Arena'));
 const Spectate = lazy(() => import('./pages/Spectate'));
 const Leaderboard = lazy(() => import('./pages/Leaderboard'));
 const Profile = lazy(() => import('./pages/Profile'));
+const DebugConnection = lazy(() => import('./pages/DebugConnection'));
 
 const BACKEND_ENABLED = Boolean(import.meta.env.VITE_API_BASE_URL);
 
@@ -120,6 +121,7 @@ function App() {
                 <Route path="/spectate/:fightId" element={<Spectate />} />
                 <Route path="/leaderboard" element={<Leaderboard />} />
                 <Route path="/profile" element={<Profile />} />
+                <Route path="/debug" element={<DebugConnection />} />
               </Routes>
             </Suspense>
           </PageTransition>

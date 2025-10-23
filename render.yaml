@@ -1,4 +1,41 @@
 services:
+  # Backend API Service
+  - type: web
+    name: cfc-backend
+    env: node
+    region: oregon
+    buildCommand: cd backend && npm install && npx prisma generate && npm run build
+    startCommand: cd backend && npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        sync: false  # Set in Render dashboard
+      - key: REDIS_URL
+        sync: false  # Set in Render dashboard
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        sync: false  # Set to your frontend URL
+      - key: FRONTEND_URL
+        sync: false  # Set to your frontend URL
+      - key: BNB_RPC_ENDPOINT
+        value: https://bsc-testnet.publicnode.com
+      - key: ESCROW_CONTRACT_ADDRESS
+        sync: false  # Set in Render dashboard
+      - key: CFC_TOKEN_ADDRESS
+        sync: false  # Set in Render dashboard
+      - key: HOUSE_WALLET_PRIVATE_KEY
+        sync: false  # Set in Render dashboard (IMPORTANT: Keep secret!)
+      - key: TREASURY_PRIVATE_KEY
+        sync: false  # Set in Render dashboard (IMPORTANT: Keep secret!)
+      - key: TREASURY_ADDRESS
+        sync: false  # Set in Render dashboard
+
+  # Frontend Static Site
   - type: web
     name: cfc-frontend
     env: static
@@ -8,3 +45,24 @@ services:
       - type: rewrite
         source: /(.*)
         destination: /index.html
+    envVars:
+      - key: VITE_API_BASE_URL
+        sync: false  # Set to backend URL (e.g., https://cfc-backend.onrender.com/api)
+      - key: VITE_BNB_NETWORK
+        value: testnet
+      - key: VITE_RPC_ENDPOINT
+        value: https://bsc-testnet.publicnode.com
+      - key: VITE_ESCROW_CONTRACT_ADDRESS
+        sync: false  # Set in Render dashboard
+      - key: VITE_CFC_TOKEN_ADDRESS
+        sync: false  # Set in Render dashboard
+      - key: VITE_WALLETCONNECT_PROJECT_ID
+        sync: false  # Set in Render dashboard
+
+# PostgreSQL Database
+databases:
+  - name: cfc-postgres
+    databaseName: cfc
+    user: cfc
+    region: oregon
+    plan: starter  # Free tier

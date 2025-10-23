@@ -57,20 +57,25 @@ export const useFightWebSocket = (fightId: string | undefined) => {
     if (!fightId) return;
 
     const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
+    console.log(`[WebSocket] ============================================`);
     console.log(`[WebSocket] Connecting to fight: ${fightId}`);
-    console.log(`[WebSocket] API Base URL: ${apiBaseUrl}`);
+    console.log(`[WebSocket] API Base URL from env: ${apiBaseUrl}`);
+    console.log(`[WebSocket] All env vars:`, import.meta.env);
     
     if (!apiBaseUrl) {
       console.error('[WebSocket] ❌ VITE_API_BASE_URL is not set! WebSocket cannot connect.');
-      setError('API URL not configured');
+      console.error('[WebSocket] Make sure VITE_API_BASE_URL is set in your Render environment variables');
+      setError('API URL not configured. Check environment variables.');
       return;
     }
 
     // WebSocket is served at root level, not under /api prefix
     // So we need to strip /api from the URL
     const wsBaseUrl = apiBaseUrl.replace(/\/api\/?$/, '');
-    console.log(`[WebSocket] WebSocket Base URL: ${wsBaseUrl}`);
-    console.log(`[WebSocket] Full URL: ${wsBaseUrl}/fights`);
+    console.log(`[WebSocket] After stripping /api: ${wsBaseUrl}`);
+    console.log(`[WebSocket] Final WebSocket URL: ${wsBaseUrl}/fights`);
+    console.log(`[WebSocket] Protocol will be: ${wsBaseUrl.startsWith('https') ? 'wss://' : 'ws://'}`);
+    console.log(`[WebSocket] ============================================`);
 
     // Connect to WebSocket namespace
     const socket = io(`${wsBaseUrl}/fights`, {
