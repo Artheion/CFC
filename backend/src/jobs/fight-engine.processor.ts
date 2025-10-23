@@ -43,12 +43,16 @@ export class FightEngineProcessor implements OnModuleInit, OnModuleDestroy {
     try {
       // Test Redis connection first
       const connection = this.queueService.getConnection();
-      await connection.ping();
-      this.logger.log('✅ Redis connection successful');
+      this.logger.log('🔍 Testing Redis connection...');
+      const pingResult = await connection.ping();
+      this.logger.log(`✅ Redis connection successful - ping result: ${pingResult}`);
     } catch (error) {
-      this.logger.error('❌ Redis connection failed! Jobs will not process.', error);
-      this.logger.error('   Make sure REDIS_URL is set correctly in your .env file');
-      throw error;
+      this.logger.error('❌ Redis connection failed! Jobs will not process.');
+      this.logger.error('❌ Error details:', error);
+      this.logger.error('   Make sure REDIS_URL is set correctly and Redis service is accessible');
+      // Don't throw - let the app start but worker won't process jobs
+      this.logger.error('   FightEngineProcessor worker will NOT be initialized!');
+      return;
     }
     
     this.worker = new Worker<FightJobData>(
