@@ -5,7 +5,7 @@ import { useGameStore } from '../store/gameStore';
 import { ADMIN_WALLET_ADDRESS } from '../config';
 import cfcLogo from '../assets/CFC-Logo.png';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { authenticateWithWallet, clearAuthenticationCache, getAccessToken } from '../utils/apiClient';
+import { authenticateWithWallet, clearAuthenticationCache, hasValidAuth } from '../utils/apiClient';
 import { useWalletContext } from '../contexts/WalletContext';
 import { useTranslation } from 'react-i18next';
 import LanguageSwitcher from './LanguageSwitcher';
@@ -52,11 +52,11 @@ const Navbar = () => {
         return;
       }
       
-      // Check if already authenticated with valid token
+      // Check if already authenticated with valid session
       if (user && user.walletAddress?.toLowerCase() === currentAddress) {
-        const token = getAccessToken();
-        if (token) {
-          console.log('[Navbar] ✅ Already authenticated with valid token');
+        const hasSession = await hasValidAuth();
+        if (hasSession) {
+          console.log('[Navbar] ✅ Already authenticated with valid session');
           return;
         }
       }

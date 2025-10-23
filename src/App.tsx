@@ -14,11 +14,17 @@ import Leaderboard from './pages/Leaderboard';
 import Profile from './pages/Profile';
 import cfcLogo from './assets/CFC-Logo.png';
 import { useGameStore } from './store/gameStore';
+import { refreshAuthSession } from './utils/apiClient';
+import { mapUser } from './utils/backendMappers';
+
+const BACKEND_ENABLED = Boolean(import.meta.env.VITE_API_BASE_URL);
 
 function App() {
   const { t } = useTranslation();
   const [isMobile, setIsMobile] = useState(false);
   const refreshRestingCocks = useGameStore((state) => state.refreshRestingCocks);
+  const setUser = useGameStore((state) => state.setUser);
+  const refreshBackendState = useGameStore((state) => state.refreshBackendState);
 
   useEffect(() => {
     document.documentElement.classList.add('dark');
@@ -33,6 +39,29 @@ function App() {
     
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  // ✅ SECURITY UPGRADE: Restore authentication session from HttpOnly cookies on app load
+  useEffect(() => {
+    const restoreSession = async () => {
+      if (!BACKEND_ENABLED) return;
+
+      console.log('[App] 🔄 Attempting to restore session from HttpOnly cookies...');
+      const sessionResult = await refreshAuthSession();
+
+      if (sessionResult.authenticated && sessionResult.user) {
+        console.log('[App] ✅ Session restored successfully');
+        const mappedUser = mapUser(sessionResult.user);
+        setUser(mappedUser);
+        
+        // Refresh all backend state
+        await refreshBackendState();
+      } else {
+        console.log('[App] No previous session found');
+      }
+    };
+
+    restoreSession();
+  }, [setUser, refreshBackendState]);
 
   useEffect(() => {
     refreshRestingCocks();
