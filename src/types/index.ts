@@ -221,4 +221,5 @@ export interface GameState {
   spectatorBets: SpectatorBet[];
   shopCatalog?: ShopCatalogItem[];
   leaderboard: LeaderboardData;
+  lastFetchTimestamps: Record<string, number>;
 }
