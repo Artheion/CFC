@@ -46,13 +46,24 @@ const connectors = connectorsForWallets(
   },
 );
 
+// Filter out invalid RPCs (frontend URLs, empty strings, etc.)
+const isValidRPC = (url: string | undefined): boolean => {
+  if (!url) return false;
+  // Don't use frontend URLs as RPC endpoints!
+  if (url.includes('cocksfightclub') || url.includes('localhost:3000') || url.includes('localhost:5173')) {
+    console.warn(`[Wagmi Config] Invalid RPC detected and filtered out: ${url}`);
+    return false;
+  }
+  return true;
+};
+
 // Multiple RPC endpoints for redundancy (will fallback automatically)
 const bscMainnetRPCs = [
   RPC_ENDPOINT,
   'https://bsc-dataseed1.bnbchain.org',
   'https://bsc-dataseed2.bnbchain.org',
   'https://bsc-dataseed1.binance.org',
-];
+].filter(isValidRPC);
 
 const bscTestnetRPCs = [
   RPC_ENDPOINT,
@@ -60,7 +71,18 @@ const bscTestnetRPCs = [
   'https://data-seed-prebsc-1-s1.binance.org:8545',
   'https://data-seed-prebsc-2-s1.binance.org:8545',
   'https://bsc-testnet-rpc.publicnode.com',
-];
+].filter(isValidRPC);
+
+// Fallback to default if all RPCs are invalid
+const defaultMainnetRPC = bscMainnetRPCs.length > 0 ? bscMainnetRPCs[0] : 'https://bsc-dataseed1.bnbchain.org';
+const defaultTestnetRPC = bscTestnetRPCs.length > 0 ? bscTestnetRPCs[0] : 'https://bsc-testnet.publicnode.com';
+
+console.log('[Wagmi Config] Using RPCs:', {
+  mainnet: defaultMainnetRPC,
+  testnet: defaultTestnetRPC,
+  mainnetCount: bscMainnetRPCs.length,
+  testnetCount: bscTestnetRPCs.length,
+});
 
 // Use createConfig with multiInjectedProviderDiscovery disabled
 // This prevents RainbowKit from auto-detecting injected wallets like Phantom
@@ -69,14 +91,14 @@ export const wagmiConfig = createConfig({
   connectors,
   multiInjectedProviderDiscovery: false, // KEY: This stops auto-detection of Phantom!
   transports: {
-    // Mainnet: Use first available RPC with fallback
-    [bsc.id]: http(BNB_NETWORK === 'mainnet' ? bscMainnetRPCs[0] : bscMainnetRPCs[1], {
+    // Mainnet: Use validated RPC endpoint
+    [bsc.id]: http(BNB_NETWORK === 'mainnet' ? defaultMainnetRPC : defaultMainnetRPC, {
       timeout: 10000, // 10 second timeout
       retryCount: 3,
       retryDelay: 1000, // 1 second between retries
     }),
-    // Testnet: Use first available RPC with fallback
-    [bscTestnet.id]: http(BNB_NETWORK === 'testnet' ? bscTestnetRPCs[0] : bscTestnetRPCs[1], {
+    // Testnet: Use validated RPC endpoint
+    [bscTestnet.id]: http(BNB_NETWORK === 'testnet' ? defaultTestnetRPC : defaultTestnetRPC, {
       timeout: 10000, // 10 second timeout
       retryCount: 3,
       retryDelay: 1000, // 1 second between retries
