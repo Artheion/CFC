@@ -462,14 +462,14 @@ export const useGameStore = create<GameStore>()(
             eggs,
             inventory,
             referral,
-            fights: state.fightQueue, // Keep existing fight queue
+            fights: [], // Empty array - loaded on-demand in Arena page
             adminReferrals,
-            active: state.activeFights, // Keep existing active fights
-            history: [], // Don't fetch history unless needed
+            active: [], // Empty array - loaded on-demand in Arena/Spectate pages
+            history: [], // Empty array - loaded on-demand
             breedingSessions,
-            bets: state.spectatorBets, // Keep existing bets
-            catalog: state.shopCatalog, // Keep existing catalog
-            leaderboard: state.leaderboard, // Keep existing leaderboard
+            bets: [], // Empty array - loaded on-demand in Spectate page
+            catalog: [], // Empty array - loaded on-demand in Shop page
+            leaderboard: null, // Null - loaded on-demand in Leaderboard page
           });
         } catch (error) {
           console.error('Failed to refresh backend state', error);
