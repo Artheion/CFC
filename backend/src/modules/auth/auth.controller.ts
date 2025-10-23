@@ -136,8 +136,8 @@ export class AuthController {
 
     const cookieOptions = {
       httpOnly: true, // Cannot be accessed by JavaScript
-      secure: isProduction, // HTTPS only in production
-      sameSite: 'lax' as const, // CSRF protection (lax for cross-site navigation)
+      secure: true, // HTTPS required (always true for cross-site cookies)
+      sameSite: 'none' as const, // Allow cross-site cookies (frontend/backend on different domains)
       path: '/',
     };
 
@@ -168,8 +168,8 @@ export class AuthController {
   private clearAuthCookies(res: Response) {
     const cookieOptions = {
       httpOnly: true,
-      secure: this.configService.get<string>('NODE_ENV') === 'production',
-      sameSite: 'lax' as const,
+      secure: true, // Must match setAuthCookies
+      sameSite: 'none' as const, // Must match setAuthCookies
       path: '/',
     };
 
