@@ -32,7 +32,7 @@ import { JwtService } from '@nestjs/jwt';
 })
 export class FightsGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
-  server: Server;
+  server!: Server;
 
   private readonly logger = new Logger(FightsGateway.name);
 
@@ -65,7 +65,7 @@ export class FightsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
         this.logger.log(`Anonymous client connected: ${client.id}`);
       }
     } catch (error) {
-      this.logger.error(`Connection error: ${error.message}`);
+      this.logger.error(`Connection error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 

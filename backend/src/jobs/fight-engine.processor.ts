@@ -412,30 +412,30 @@ export class FightEngineProcessor implements OnModuleInit, OnModuleDestroy {
 
     // Battle for 10 turns or until one reaches 0 HP
     for (let turn = 1; turn <= 10; turn++) {
-      const turnPriority = calculateTurnPriority(cock1, cock2, seededRandom);
+      const turnPriority = calculateTurnPriority(cock1.speed, seededRandom);
       
       if (turnPriority === 1) {
         // Cock1 attacks
-        const damage = calculateDamage(cock1, cock2, seededRandom);
-        cock2Health = Math.max(0, cock2Health - damage);
+        const damageResult = calculateDamage(cock1, cock2, 0, seededRandom);
+        cock2Health = Math.max(0, cock2Health - damageResult.damage);
         
         if (cock2Health <= 0) break;
         
         // Cock2 counter-attacks
-        const counterDamage = calculateDamage(cock2, cock1, seededRandom);
-        cock1Health = Math.max(0, cock1Health - counterDamage);
+        const counterDamageResult = calculateDamage(cock2, cock1, 0, seededRandom);
+        cock1Health = Math.max(0, cock1Health - counterDamageResult.damage);
         
         if (cock1Health <= 0) break;
       } else {
         // Cock2 attacks
-        const damage = calculateDamage(cock2, cock1, seededRandom);
-        cock1Health = Math.max(0, cock1Health - damage);
+        const damageResult = calculateDamage(cock2, cock1, 0, seededRandom);
+        cock1Health = Math.max(0, cock1Health - damageResult.damage);
         
         if (cock1Health <= 0) break;
         
         // Cock1 counter-attacks
-        const counterDamage = calculateDamage(cock1, cock2, seededRandom);
-        cock2Health = Math.max(0, cock2Health - counterDamage);
+        const counterDamageResult = calculateDamage(cock1, cock2, 0, seededRandom);
+        cock2Health = Math.max(0, cock2Health - counterDamageResult.damage);
         
         if (cock2Health <= 0) break;
       }
