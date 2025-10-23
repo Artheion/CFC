@@ -430,6 +430,15 @@ export const useGameStore = create<GameStore>()(
           return;
         }
 
+        // Add caching to prevent excessive calls to refreshBackendState
+        const now = Date.now();
+        const REFRESH_CACHE_DURATION = 5000; // 5 seconds - short because this is core data
+        const lastRefresh = state.lastFetchTimestamps.coreRefresh || 0;
+        
+        if (now - lastRefresh < REFRESH_CACHE_DURATION) {
+          return; // Skip if refreshed recently
+        }
+
         try {
           set({ loading: true });
           const profile = await fetchProfile();
@@ -477,6 +486,11 @@ export const useGameStore = create<GameStore>()(
             catalog: [], // Empty array - loaded on-demand in Shop page
             leaderboard: null, // Null - loaded on-demand in Leaderboard page
           });
+          
+          // Update cache timestamp
+          set(state => ({
+            lastFetchTimestamps: { ...state.lastFetchTimestamps, coreRefresh: now }
+          }));
         } catch (error) {
           console.error('Failed to refresh backend state', error);
           
