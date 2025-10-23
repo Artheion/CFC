@@ -427,12 +427,23 @@ export const useGameStore = create<GameStore>()(
             throw new Error('Unable to load profile from backend');
           }
 
+          // Fetch critical data first (always needed)
           const [
             cocks,
             chickens,
             eggs,
             inventory,
             referral,
+          ] = await Promise.all([
+            fetchCocks(),
+            fetchChickens(),
+            fetchEggs(),
+            fetchInventory(),
+            fetchReferrals(),
+          ]);
+
+          // Fetch secondary data (can be lazy loaded)
+          const [
             fights,
             active,
             history,
@@ -442,18 +453,13 @@ export const useGameStore = create<GameStore>()(
             adminReferrals,
             leaderboard,
           ] = await Promise.all([
-            fetchCocks(),
-            fetchChickens(),
-            fetchEggs(),
-            fetchInventory(),
-            fetchReferrals(),
-            fetchFightQueue(),
-            fetchActiveFights(),
-            fetchFightHistory(20),
-            listActiveBreedingSessions(),
-            listBets(),
-            listShopCatalog(),
-            profile.isAdmin ? fetchAdminReferralCodes() : Promise.resolve([] as BackendReferralCode[]),
+            fetchFightQueue().catch(() => []),
+            fetchActiveFights().catch(() => []),
+            fetchFightHistory(20).catch(() => []),
+            listActiveBreedingSessions().catch(() => []),
+            listBets().catch(() => []),
+            listShopCatalog().catch(() => []),
+            profile.isAdmin ? fetchAdminReferralCodes().catch(() => []) : Promise.resolve([] as BackendReferralCode[]),
             fetchLeaderboard().catch(() => null),
           ]);
 
@@ -863,8 +869,21 @@ export const useGameStore = create<GameStore>()(
           console.log('[Store] Added chicken directly from roulette:', mappedChicken.id);
         }
         
-        // Then refresh to get any other updates (but delay slightly to avoid race condition)
-        setTimeout(() => get().refreshBackendState(), 500);
+        // Only refresh essential data after roulette (don't need full refresh)
+        setTimeout(async () => {
+          try {
+            const [newCocks, newInventory] = await Promise.all([
+              fetchCocks(),
+              fetchInventory(),
+            ]);
+            set((state) => ({
+              cocks: newCocks.map((cock) => mapCock(cock, state.user?.username)),
+              items: mapInventory(newInventory),
+            }));
+          } catch (error) {
+            console.error('[Store] Failed to refresh after roulette:', error);
+          }
+        }, 500);
 
         const reward = spin.resultReferenceId ?? undefined;
 
