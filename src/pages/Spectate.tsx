@@ -63,20 +63,7 @@ const Spectate = () => {
   const cock1 = fight?.cock1 || cocks.find(c => c.id === fight?.cock1Id);
   const cock2 = fight?.cock2 || cocks.find(c => c.id === fight?.cock2Id);
   
-  // Debug logging
-  useEffect(() => {
-    if (fight) {
-      console.log('[Spectate] Fight data:', {
-        id: fight.id,
-        status: fight.status,
-        hasCock1: !!cock1,
-        hasCock2: !!cock2,
-        cock1Name: cock1?.name,
-        cock2Name: cock2?.name,
-        rounds: fight.rounds?.length || 0
-      });
-    }
-  }, [fight?.id, fight?.status, cock1, cock2]);
+
 
   // Update time every second
   useEffect(() => {
@@ -90,19 +77,19 @@ const Spectate = () => {
   useEffect(() => {
     if (!fightId) return;
     
-    console.log('[Spectate] Setting up fight status polling...');
+
     
     // Initial fetch
     refreshBackendState();
     
     // Poll every 2 seconds
     const pollInterval = setInterval(() => {
-      console.log('[Spectate] Polling backend for fight updates...');
+
       refreshBackendState();
     }, 2000);
     
     return () => {
-      console.log('[Spectate] Cleaning up fight status polling');
+
       clearInterval(pollInterval);
     };
   }, [fightId, refreshBackendState]);
@@ -111,11 +98,11 @@ const Spectate = () => {
   useEffect(() => {
     if (fight && initialFightStatusRef.current === null) {
       initialFightStatusRef.current = fight.status;
-      console.log('[Spectate] Initial fight status:', fight.status);
+
       
       // If fight was already finished on load, show results immediately
       if (fight.status === 'finished') {
-        console.log('[Spectate] Fight already finished - showing results');
+
         setArenaPhase('finished');
         setFightPhase('finished');
         setAnimationStarted(true); // Mark as done so we don't animate
@@ -128,7 +115,7 @@ const Spectate = () => {
     if (!fight || !cock1 || !cock2) return;
 
     if (fight.status === 'betting') {
-      console.log('[Spectate] Fight in betting phase');
+
       setArenaPhase('idle');
       setFightPhase('betting');
       setAnimatedRounds([]);
@@ -138,7 +125,7 @@ const Spectate = () => {
     } else if (fight.status === 'finished' && fight.rounds && fight.rounds.length > 0) {
       // Only animate if we saw the fight during betting (not already finished on load)
       if (!animationStarted && initialFightStatusRef.current === 'betting') {
-        console.log('[Spectate] Fight just finished - starting animation');
+
         setAnimationStarted(true);
         startRound(1);
       }
@@ -151,11 +138,10 @@ const Spectate = () => {
     // Get backend round (the source of truth!)
     const backendRound = fight.rounds[roundNumber - 1];
     if (!backendRound) {
-      console.error(`[Animation] No backend round found for round ${roundNumber}`);
       return;
     }
 
-    console.log(`[Animation] Animating Round ${roundNumber} (backend winner: ${backendRound.winnerId === cock1.id ? cock1.name : cock2.name})`);
+
 
     // Reset display health to 100 for new round
     setDisplayHealth({ cock1: 100, cock2: 100 });
@@ -242,12 +228,11 @@ const Spectate = () => {
           const cock1Wins = allRounds.filter(r => r.winnerId === cock1.id).length;
           const cock2Wins = allRounds.filter(r => r.winnerId === cock2.id).length;
 
-          console.log(`[Animation] Round ${roundNumber} winner: ${roundWinnerId === cock1.id ? cock1.name : cock2.name}`);
-          console.log(`[Animation] Score: ${cock1.name} ${cock1Wins} - ${cock2Wins} ${cock2.name}`);
+
 
           // Check if fight is over (best of 3 - first to 2 wins)
           if (cock1Wins >= 2) {
-            console.log(`[Animation] ${cock1.name} wins the fight!`);
+
             setTimeout(() => {
               // Set final knockout info for the overall fight loser
               setKnockoutInfo({ winnerId: cock1.id, loserId: cock2.id });
@@ -255,7 +240,7 @@ const Spectate = () => {
               setFightPhase('finished');
             }, 3000);
           } else if (cock2Wins >= 2) {
-            console.log(`[Animation] ${cock2.name} wins the fight!`);
+
             setTimeout(() => {
               // Set final knockout info for the overall fight loser
               setKnockoutInfo({ winnerId: cock2.id, loserId: cock1.id });
@@ -276,8 +261,6 @@ const Spectate = () => {
   const endFight = (winnerId: string) => {
     if (!fight || !cock1 || !cock2) return;
 
-    console.log(`Ending fight. Winner: ${winnerId === cock1.id ? cock1.name : cock2.name}`);
-
     // Update fight status
     updateFightById(fight.id, {
       status: 'finished',
@@ -292,8 +275,6 @@ const Spectate = () => {
     const totalBetAmount = fight.spectatorBets.reduce((sum, bet) => sum + bet.amount, 0);
     const totalMainPot = fight.wager * 2; // Both fighters' wagers
     const totalPot = totalMainPot + totalBetAmount;
-
-    console.log(`Total pot: ${totalPot} (Main: ${totalMainPot}, Bets: ${totalBetAmount})`);
 
     // Resolve the latest cock data from the store to avoid stale references
     const latestState = useGameStore.getState();
@@ -319,8 +300,6 @@ const Spectate = () => {
     const loserHealthLoss = loserRoundsLost * 10;
     const winnerNewHealth = Math.max(0, winner.health - winnerHealthLoss);
     const loserNewHealth = Math.max(0, loser.health - loserHealthLoss);
-    
-    console.log(`Energy Cost - ${winner.name}: ${winnerEnergyCost} | ${loser.name}: ${loserEnergyCost}`);
     
     updateCock(winner.id, { 
       wins: winner.wins + 1,
@@ -350,10 +329,7 @@ const Spectate = () => {
     
     // Award fighter winnings to the cock owner if they're the current user
     if (winner.ownerAddress === user?.walletAddress) {
-      console.log(`Fighter winnings: ${fighterWinnings} BNB awarded to ${winner.name} (${winner.rarity} - ${rarityBonus * 100}% bonus)`);
       updateBNBBalance(fighterWinnings);
-    } else {
-      console.log(`Fighter winnings: ${fighterWinnings} BNB for ${winner.name} (owner: ${winner.ownerAddress})`);
     }
 
     // 2. Distribute remaining spectator bets to correct bettors
@@ -362,14 +338,13 @@ const Spectate = () => {
     const correctBetTotal = correctBets.reduce((sum, bet) => sum + bet.amount, 0);
     const bettorShare = totalBetAmount * (1 - rarityBonus); // Remaining after fighter takes their bonus
 
-    console.log(`Correct bets: ${correctBets.length}, Incorrect bets: ${incorrectBets.length}`);
-    console.log(`Bettor share to distribute: ${bettorShare} (${((1 - rarityBonus) * 100).toFixed(0)}%)`);
+
 
     // Award winnings to correct bettors
     correctBets.forEach(bet => {
       if (bet.userId === user?.walletAddress && correctBetTotal > 0) {
         const winnings = (bet.amount / correctBetTotal) * bettorShare;
-        console.log(`User won bet! Awarded: ${winnings} $CFC`);
+
         updateBNBBalance(winnings);
       }
     });
@@ -413,17 +388,15 @@ const Spectate = () => {
 
     // Check authentication status before proceeding
     if (!hasValidAuth()) {
-      console.error('[Spectate] No valid authentication token found for placing bet');
-      
       // Try to authenticate
       if (provider && address) {
         try {
-          console.log('[Spectate] Attempting to authenticate before placing bet...');
+
           showModal('Authenticating', 'Authenticating with backend...', 'info');
           
           await authenticateWithWallet(provider);
           
-          console.log('[Spectate] Authentication successful, retrying bet placement');
+
           closeModal();
           
           // Give a small delay for token to be fully persisted
@@ -432,7 +405,6 @@ const Spectate = () => {
           // Retry the bet placement by calling this function again
           return handlePlaceBet();
         } catch (authError) {
-          console.error('[Spectate] Authentication failed:', authError);
           showModal(
             'Authentication Required',
             'Authentication required to place bets.\n\nPlease ensure you are connected to the correct network and try again.\n\nIf the issue persists, try disconnecting and reconnecting your wallet.',
@@ -481,14 +453,8 @@ const Spectate = () => {
     }
 
     try {
-      console.log('[Spectate] Placing bet on escrow contract...');
-      console.log('[Spectate] Fight ID:', fight.id);
-      console.log('[Spectate] Selected cock:', selectedWinner);
-      console.log('[Spectate] Amount:', amount, '$CFC');
-
       // Determine player choice (1 or 2)
       const playerChoice = selectedWinner === fight.cock1Id ? 1 : 2;
-      console.log('[Spectate] Player choice:', playerChoice);
 
       // Call escrow contract to place bet
       const result = await placeBetOnContract({
@@ -503,7 +469,7 @@ const Spectate = () => {
         return;
       }
 
-      console.log('[Spectate] ✅ Bet placed on contract! TxHash:', result.txHash);
+
 
       // Now update backend with the bet and transaction hash
       const success = await placeBet(fight.id, selectedWinner, amount, result.txHash);
@@ -515,7 +481,6 @@ const Spectate = () => {
         showModal(t('spectate.betFailed'), 'Bet escrowed on contract but failed to save in database. Please contact support with txHash: ' + result.txHash, 'error');
       }
     } catch (error) {
-      console.error('[Spectate] Bet error:', error);
       const message = error instanceof Error ? error.message : 'Unknown error';
       showModal('Bet Failed', message, 'error');
     }

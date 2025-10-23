@@ -213,7 +213,7 @@ const Profile = () => {
   }, [userCocks, allCocksAdmin, isAdmin, activeTab]);
 
   useEffect(() => {
-    console.log('[Admin] Referral codes from store:', referralCodes.length, referralCodes);
+
     setReferralEdits((prev) => {
       const next: Record<string, { discountPercent: string; freeWheelSpins: string; earningsSharePercent: string; dirty: boolean; saving: boolean }> = {};
       referralCodes.forEach((code) => {
@@ -385,7 +385,7 @@ const Profile = () => {
         if (!response.ok) {
           // Silently fail on auth errors to avoid spam
           if (response.status === 401) {
-            console.log('[Profile] Not authenticated, skipping claimable CFC fetch');
+
           }
           return;
         }
@@ -395,7 +395,7 @@ const Profile = () => {
         setClaimableMatchIds(data.matchIds || []);
       } catch (error) {
         // Silently fail - don't spam console
-        console.log('[Profile] Failed to fetch claimable CFC (network error)');
+
       }
     };
 
@@ -812,14 +812,14 @@ const Profile = () => {
 
     setSavingPrices(true);
     try {
-      console.log('[Admin] Updating prices:', { rouletteValue, capsuleValue, medkitValue });
+
       await updatePrices({
         rouletteCost: rouletteValue,
         capsulePrice: capsuleValue,
         medkitPrice: medkitValue,
       });
       
-      console.log('[Admin] Prices updated successfully');
+
       setAdminFeedback({ 
         type: 'success', 
         message: `Prices updated: Roulette ${rouletteValue} BNB, Capsule ${capsuleValue} $CFC, Medkit ${medkitValue} $CFC` 

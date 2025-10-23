@@ -164,7 +164,7 @@ const Breeding = () => {
       // Don't reset completed breeding (endTime in past) - let checkBreedingComplete handle that
       if (cock.isBreeding && (!cock.breedingEndTime || 
                               cock.breedingEndTime > now + maxBreedingTime)) {
-        console.log(`🔧 Auto-fixing stuck breeding state for cock: ${cock.name} (endTime: ${cock.breedingEndTime})`);
+
         updateCock(cock.id, { isBreeding: false, breedingEndTime: undefined });
       }
     });
@@ -173,7 +173,7 @@ const Breeding = () => {
       // Don't reset completed breeding (endTime in past) - let checkBreedingComplete handle that
       if (chicken.isBreeding && (!chicken.breedingEndTime || 
                                  chicken.breedingEndTime > now + maxBreedingTime)) {
-        console.log(`🔧 Auto-fixing stuck breeding state for chicken: ${chicken.name} (endTime: ${chicken.breedingEndTime})`);
+
         updateChicken(chicken.id, { isBreeding: false, breedingEndTime: undefined });
       }
     });

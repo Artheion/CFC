@@ -273,29 +273,28 @@ const Hub = () => {
     if (!draggedItem) return;
     const itemId = draggedItem;
 
-    console.log('[Hub] Using item:', itemId, 'on cock:', targetCock.name);
+
 
     // Handle both 'medkit' and 'med-kit' slugs
     if (itemId === 'medkit' || itemId === 'med-kit') {
-      console.log('[Hub] Med Kit check - Current health:', targetCock.health);
+
       
       if (targetCock.health >= 100) {
-        console.log('[Hub] Health already full');
+
         setItemFeedback({ type: 'error', message: `${targetCock.name} already has full health.` });
         setDraggedItem(null);
         return;
       }
       
       if (targetCock.health >= 50) {
-        console.log('[Hub] Health too high for Med Kit (need < 50)');
+
         setItemFeedback({ type: 'error', message: `${targetCock.name}'s health must be below 50 to use Med Kit.` });
         setDraggedItem(null);
         return;
       }
 
-      console.log('[Hub] Calling useItem for Med Kit');
+
       const success = await useItem(itemId, targetCock.id);
-      console.log('[Hub] useItem result:', success);
       
       if (!success) {
         setItemFeedback({ type: 'error', message: 'Failed to use Med Kit.' });
@@ -309,7 +308,7 @@ const Hub = () => {
         updateCock(targetCock.id, { health: parseFloat(newHealth.toFixed(2)) });
       }
 
-      console.log('[Hub] Med Kit used successfully');
+
       setItemFeedback({ type: 'success', message: `${targetCock.name} recovered 50 health!` });
       setDraggedItem(null);
       return;
@@ -319,25 +318,24 @@ const Hub = () => {
     if (itemId === 'capsule' || itemId === 'energy-capsule') {
       const { maxEnergy } = getEnergyStats(targetCock);
       const energyThreshold = Math.floor(maxEnergy * 0.75);
-      console.log('[Hub] Energy Capsule check - Current energy:', targetCock.energy, 'Max:', maxEnergy, 'Threshold (75%):', energyThreshold);
+
       
       if (targetCock.energy >= maxEnergy) {
-        console.log('[Hub] Energy already full');
+
         setItemFeedback({ type: 'error', message: `${targetCock.name} already has full energy.` });
         setDraggedItem(null);
         return;
       }
       
       if (targetCock.energy >= energyThreshold) {
-        console.log('[Hub] Energy too high for capsule (need < ' + energyThreshold + ')');
+
         setItemFeedback({ type: 'error', message: `${targetCock.name}'s energy must be below ${energyThreshold} to use Energy Capsule.` });
         setDraggedItem(null);
         return;
       }
 
-      console.log('[Hub] Calling useItem for Energy Capsule');
+
       const success = await useItem(itemId, targetCock.id);
-      console.log('[Hub] useItem result:', success);
       
       if (!success) {
         setItemFeedback({ type: 'error', message: 'Failed to use Energy Capsule.' });
@@ -351,7 +349,7 @@ const Hub = () => {
         updateCock(targetCock.id, { energy: parseFloat(newEnergy.toFixed(2)) });
       }
 
-      console.log('[Hub] Energy Capsule used successfully');
+
       setItemFeedback({ type: 'success', message: `${targetCock.name} gained 25% energy!` });
       setDraggedItem(null);
       return;

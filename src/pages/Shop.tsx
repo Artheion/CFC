@@ -202,22 +202,14 @@ const Shop = () => {
           setRouletteCost(finalCost);
           setHasFreeSpin(referralInfo.hasFreeSpin);
           setDiscountPercent(referralInfo.discountPercent);
-          
-          console.log('[Shop] Loaded prices:', {
-            baseCost: prices.rouletteCost,
-            discount: referralInfo.discountPercent,
-            finalCost,
-            hasFreeSpin: referralInfo.hasFreeSpin
-          });
         } catch (error) {
-          console.error('[Shop] Failed to load prices, using default:', error);
         }
       };
       void fetchPrices();
       
       // Listen for price updates from admin panel
       const handlePriceUpdate = () => {
-        console.log('[Shop] Price update detected, reloading...');
+
         void fetchPrices();
         void loadShopCatalog();
       };
@@ -340,7 +332,7 @@ const Shop = () => {
       if (hasFreeSpin) {
         // Free spin - no payment needed!
         setRewardMessage('Using your free spin!');
-        console.log('[Shop] Using free spin - no payment required');
+
       } else {
         // Check if user has enough BNB balance for roulette
         const wheelCost = rouletteCost;
@@ -383,8 +375,6 @@ const Shop = () => {
 
       const outcome = await rollRoulette('standard', paymentTxHash);
 
-      console.log('[Shop] Roulette outcome:', outcome);
-
       if (!outcome.success) {
         setError(outcome.error || 'Unable to roll the case right now.');
         return;
@@ -394,20 +384,14 @@ const Shop = () => {
       const result = outcome.cock || outcome.chicken;
       
       if (!result) {
-        console.error('[Shop] No cock or chicken in outcome:', outcome);
         setError('Unable to load reward. Please refresh the page.');
         return;
       }
 
-      console.log('[Shop] Received from backend:', result);
-
       if (!result.image) {
-        console.error('[Shop] Missing image in result:', result);
         setError('Unable to load reward image. Please refresh the page.');
         return;
       }
-
-      console.log('[Shop] Starting animation with result:', result);
 
       if (!containerWidth) {
         setError('Roulette is still calibrating. Please wait a moment and try again.');

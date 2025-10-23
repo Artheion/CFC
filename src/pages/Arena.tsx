@@ -250,13 +250,13 @@ const Arena = () => {
       // Try to authenticate
       if (provider && address) {
         try {
-          console.log('[Arena] Attempting to authenticate...');
+
           setErrorMessage('Authenticating with backend...');
           setShowErrorModal(true);
           
           await authenticateWithWallet(provider);
           
-          console.log('[Arena] Authentication successful, retrying fight creation');
+
           setShowErrorModal(false);
           
           // Give a small delay for token to be fully persisted
@@ -342,7 +342,7 @@ const Arena = () => {
       }
       
       console.log('[Arena] ✅ Tokens escrowed on contract! TxHash:', result.txHash);
-      console.log('[Arena] Step 2: Creating fight in database with ID:', fightId);
+
       
       // Now create fight in database with the contract transaction hash and pre-generated ID
       const createdFight = await createFight(selectedCockId, wager, result.txHash, fightId);
@@ -353,7 +353,7 @@ const Arena = () => {
         return;
       }
       
-      console.log('[Arena] ✅ Fight created in database with ID:', createdFight.id);
+
       // Success!
       setShowSuccessModal(true);
       setSelectedCockId('');
@@ -390,13 +390,13 @@ const Arena = () => {
       // Try to authenticate
       if (provider && address) {
         try {
-          console.log('[Arena] Attempting to authenticate before joining fight...');
+
           setErrorMessage('Authenticating with backend...');
           setShowErrorModal(true);
           
           await authenticateWithWallet(provider);
           
-          console.log('[Arena] Authentication successful, retrying join fight');
+
           setShowErrorModal(false);
           
           // Give a small delay for token to be fully persisted
@@ -463,7 +463,7 @@ const Arena = () => {
         return;
       }
 
-      console.log('[Arena] Joining match on escrow contract with wager:', fight.wager);
+
       
       // Call escrow contract to join match and escrow tokens
       const result = await joinMatch({
@@ -477,7 +477,7 @@ const Arena = () => {
         return;
       }
       
-      console.log('[Arena] Match joined on contract:', result.txHash);
+
       
       // Join fight in backend with contract transaction hash
       const newFightId = await joinFight(fightQueueId, joinCockId, result.txHash);
