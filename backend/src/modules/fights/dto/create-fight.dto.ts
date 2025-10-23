@@ -19,8 +19,8 @@ export class CreateFightDto {
 
   @IsString({ message: 'Payment signature must be a string' })
   @IsNotEmpty({ message: 'Payment signature is required for on-chain verification' })
-  @Matches(/^0x[a-fA-F0-9]{130}$/, {
-    message: 'Payment signature must be a valid Ethereum signature (0x + 130 hex chars)',
+  @Matches(/^0x[a-fA-F0-9]{64,130}$/, {
+    message: 'Payment signature must be a valid Ethereum signature or transaction hash',
   })
   paymentSignature!: string;
 }
