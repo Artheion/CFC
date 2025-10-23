@@ -200,21 +200,47 @@ export class FightsService {
     });
 
     // Add fight to queue with 3 minute delay for betting phase
-    console.log(`[FightsService] Adding fight ${fightId} to queue with 3 minute delay`);
-    const job = await this.queueService
-      .getQueue(JOB_QUEUE_NAMES.FIGHT_ENGINE)
-      .add(
-        'start-fight',
-        { fightId },
-        {
-          jobId: fightId,
-          delay: 180000, // 3 minute betting phase (180 seconds)
-          removeOnComplete: false, // Keep for debugging
-          removeOnFail: false,
-        },
-      );
+    console.log(`[FightsService] 📋 Adding fight ${fightId} to queue with 3 minute delay`);
     
-    console.log(`[FightsService] Fight job ${job.id} added to queue, will process at ${new Date(job.timestamp + 180000).toISOString()}`);
+    try {
+      const job = await this.queueService
+        .getQueue(JOB_QUEUE_NAMES.FIGHT_ENGINE)
+        .add(
+          'start-fight',
+          { fightId },
+          {
+            jobId: fightId,
+            delay: 180000, // 3 minute betting phase (180 seconds)
+            removeOnComplete: false, // Keep for debugging
+            removeOnFail: false,
+            attempts: 3, // Retry up to 3 times on failure
+            backoff: {
+              type: 'exponential',
+              delay: 5000, // Start with 5 second delay
+            },
+          },
+        );
+      
+      console.log(`[FightsService] ✅ Fight job ${job.id} added to queue successfully`);
+      console.log(`[FightsService] 📅 Will process at ${new Date(job.timestamp + 180000).toISOString()}`);
+      console.log(`[FightsService] 🎯 Job details:`, {
+        id: job.id,
+        name: job.name,
+        data: job.data,
+        opts: job.opts,
+      });
+      
+      // Verify the job was added to the queue
+      const jobFromQueue = await this.queueService.getQueue(JOB_QUEUE_NAMES.FIGHT_ENGINE).getJob(fightId);
+      if (jobFromQueue) {
+        console.log(`[FightsService] ✅ Verified: Job ${fightId} is in queue`);
+      } else {
+        console.log(`[FightsService] ⚠️  WARNING: Job ${fightId} not found in queue after adding!`);
+      }
+    } catch (error) {
+      console.error(`[FightsService] ❌ Failed to add fight ${fightId} to queue:`, error);
+      throw new Error('Failed to queue fight for processing. Check Redis connection.');
+    }
 
     return updatedFight;
   }

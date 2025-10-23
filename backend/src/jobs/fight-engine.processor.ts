@@ -38,26 +38,57 @@ export class FightEngineProcessor implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleInit() {
-    this.logger.log('Initializing FightEngineProcessor worker...');
+    this.logger.log('🔧 Initializing FightEngineProcessor worker...');
+    
+    try {
+      // Test Redis connection first
+      const connection = this.queueService.getConnection();
+      await connection.ping();
+      this.logger.log('✅ Redis connection successful');
+    } catch (error) {
+      this.logger.error('❌ Redis connection failed! Jobs will not process.', error);
+      this.logger.error('   Make sure REDIS_URL is set correctly in your .env file');
+      throw error;
+    }
     
     this.worker = new Worker<FightJobData>(
       JOB_QUEUE_NAMES.FIGHT_ENGINE,
       async (job) => {
-        this.logger.log(`Processing job ${job.id} with data: ${JSON.stringify(job.data)}`);
-        await this.processFight(job.data.fightId);
+        this.logger.log(`⚔️  Processing fight job ${job.id} with data: ${JSON.stringify(job.data)}`);
+        this.logger.log(`⚔️  Fight ID: ${job.data.fightId}`);
+        try {
+          await this.processFight(job.data.fightId);
+          this.logger.log(`✅ Fight job ${job.id} completed successfully`);
+        } catch (error) {
+          this.logger.error(`❌ Fight job ${job.id} processing error:`, error);
+          throw error;
+        }
       },
-      { connection: this.queueService.getConnection() },
+      { 
+        connection: this.queueService.getConnection(),
+        concurrency: 1, // Process one fight at a time
+      },
     );
 
     this.worker.on('completed', (job) => {
-      this.logger.log(`Fight job ${job.id} completed successfully`);
+      this.logger.log(`✅ Fight job ${job.id} completed successfully`);
     });
 
     this.worker.on('failed', (job, err) => {
-      this.logger.error(`Fight job ${job?.id} failed: ${err.message}`, err.stack);
+      this.logger.error(`❌ Fight job ${job?.id} failed: ${err.message}`, err.stack);
+    });
+
+    this.worker.on('error', (err) => {
+      this.logger.error(`❌ Worker error: ${err.message}`, err.stack);
+    });
+
+    this.worker.on('active', (job) => {
+      this.logger.log(`🎮 Fight job ${job.id} is now active (processing fight ${job.data.fightId})`);
     });
     
-    this.logger.log('✓ FightEngineProcessor worker initialized and listening for jobs');
+    this.logger.log('✅ FightEngineProcessor worker initialized and listening for jobs');
+    this.logger.log(`📊 Worker concurrency: 1`);
+    this.logger.log(`🔊 Worker ready to process ${JOB_QUEUE_NAMES.FIGHT_ENGINE} jobs`);
   }
 
   async onModuleDestroy() {
@@ -70,6 +101,7 @@ export class FightEngineProcessor implements OnModuleInit, OnModuleDestroy {
    */
   private async processFight(fightId: string) {
     this.logger.log(`[FightEngine] 🎮 Starting REAL-TIME fight processing: ${fightId}`);
+    this.logger.log(`[FightEngine] ⏰ Current time: ${new Date().toISOString()}`);
     
     const fight = await this.prisma.fight.findUnique({
       where: { id: fightId },
@@ -80,16 +112,27 @@ export class FightEngineProcessor implements OnModuleInit, OnModuleDestroy {
       },
     });
 
-    if (!fight || !fight.cock2) {
-      this.logger.warn(`Fight ${fightId} not found or incomplete, skipping`);
+    if (!fight) {
+      this.logger.error(`[FightEngine] ❌ Fight ${fightId} not found in database!`);
+      return;
+    }
+
+    if (!fight.cock2) {
+      this.logger.warn(`[FightEngine] ⚠️  Fight ${fightId} incomplete - cock2 not set. Skipping.`);
       return;
     }
 
     // Only process fights in BETTING status (not QUEUED - those haven't been joined yet)
     if (fight.status !== FightStatus.BETTING) {
-      this.logger.warn(`Fight ${fightId} is in status ${fight.status}, not BETTING. Skipping.`);
+      this.logger.warn(`[FightEngine] ⚠️  Fight ${fightId} is in status ${fight.status}, not BETTING. Skipping.`);
       return;
     }
+
+    this.logger.log(`[FightEngine] ✅ Fight validated - proceeding with processing`);
+    this.logger.log(`[FightEngine] 🥊 Cock1: ${fight.cock1.name} (${fight.cock1.id})`);
+    this.logger.log(`[FightEngine] 🥊 Cock2: ${fight.cock2.name} (${fight.cock2.id})`);
+    this.logger.log(`[FightEngine] 💰 Wager: ${fight.wager} $CFC`);
+    this.logger.log(`[FightEngine] 👥 Spectator bets: ${fight.spectatorBets.length}`);
 
     const now = new Date();
     
@@ -121,11 +164,15 @@ export class FightEngineProcessor implements OnModuleInit, OnModuleDestroy {
 
     // ✅ BROADCAST: Fight is starting
     if (this.gateway) {
+      this.logger.log(`[FightEngine] 📡 Broadcasting fight-starting event via WebSocket`);
       this.gateway.emitFightStarting(fightId, {
         cock1Id: fight.cock1.id,
         cock2Id: fight.cock2.id,
         fightSeed,
       });
+    } else {
+      this.logger.error(`[FightEngine] ❌ Gateway not injected! Cannot broadcast WebSocket events!`);
+      this.logger.error(`[FightEngine]    Make sure FightsModule.onModuleInit() is calling setGateway()`);
     }
 
     try {

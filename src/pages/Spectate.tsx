@@ -375,20 +375,6 @@ const Spectate = () => {
 
   return (
     <div className="min-h-screen bg-background-dark">
-      {/* ✅ REAL-TIME: WebSocket Connection Status */}
-      {isConnected && (
-        <div className="fixed top-20 right-4 z-50 flex items-center gap-2 bg-green-500/20 border border-green-500 rounded-lg px-3 py-2 text-sm">
-          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-          <span className="text-green-400 font-semibold">LIVE</span>
-        </div>
-      )}
-      {!isConnected && fightId && (
-        <div className="fixed top-20 right-4 z-50 flex items-center gap-2 bg-yellow-500/20 border border-yellow-500 rounded-lg px-3 py-2 text-sm">
-          <div className="w-2 h-2 bg-yellow-500 rounded-full" />
-          <span className="text-yellow-400 font-semibold">Connecting...</span>
-        </div>
-      )}
-      
       {/* Fight Info Header */}
       <div className="border-b border-white/10 bg-background-dark/80 px-4 py-6 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">

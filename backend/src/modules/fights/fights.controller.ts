@@ -45,6 +45,44 @@ export class FightsController {
     }));
   }
 
+  /**
+   * 🐛 DEBUG ENDPOINT: Manually trigger fight processing
+   * Remove this in production!
+   */
+  @Get(':id/debug/trigger')
+  async debugTriggerFight(@Param('id') fightId: string) {
+    console.log(`[DEBUG] Manually triggering fight: ${fightId}`);
+    
+    const fight = await this.prisma.fight.findUnique({
+      where: { id: fightId },
+      include: { cock1: true, cock2: true },
+    });
+    
+    if (!fight) {
+      return { success: false, error: 'Fight not found' };
+    }
+    
+    console.log(`[DEBUG] Fight status: ${fight.status}`);
+    console.log(`[DEBUG] Cock1: ${fight.cock1?.name || 'null'}`);
+    console.log(`[DEBUG] Cock2: ${fight.cock2?.name || 'null'}`);
+    
+    // Manually add job to queue with NO delay for testing
+    const job = await this.fightsService['queueService']
+      .getQueue('FIGHT_ENGINE')
+      .add('start-fight', { fightId }, { 
+        jobId: `debug-${fightId}-${Date.now()}`,
+        delay: 0, // Process immediately
+      });
+    
+    return { 
+      success: true, 
+      message: 'Fight job added to queue (0 delay)',
+      jobId: job.id,
+      fightId,
+      fightStatus: fight.status,
+    };
+  }
+
   @Get('active')
   async listActive() {
     const fights = await this.fightsService.listActive();
