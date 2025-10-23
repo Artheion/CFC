@@ -55,7 +55,7 @@ const walletClientToBrowserProvider = (walletClient: ReturnType<typeof useWallet
   // Passing incorrect chainId causes transaction signing issues
   const provider = new BrowserProvider(eip1193Provider);
   console.log('[walletClientToBrowserProvider] Created BrowserProvider', {
-    hasTransport: !!walletClient.transport,
+    hasTransport: !!(walletClient as any)?.transport,
     chainId: (walletClient as any)?.chain?.id,
   });
   return provider;
