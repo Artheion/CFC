@@ -1,4 +1,4 @@
-import { Module, OnModuleInit } from '@nestjs/common';
+import { Logger, Module, OnModuleInit } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { FightsController } from './fights.controller';
 import { FightsService } from './fights.service';
@@ -17,16 +17,23 @@ import { FightEngineProcessor } from '@jobs/fight-engine.processor';
   exports: [FightsService, FightsGateway],
 })
 export class FightsModule implements OnModuleInit {
+  private readonly logger = new Logger(FightsModule.name);
+
   constructor(
     private readonly fightEngineProcessor: FightEngineProcessor,
     private readonly fightsGateway: FightsGateway,
-  ) {}
+  ) {
+    this.logger.log('🏗️  FightsModule constructor called');
+  }
 
   /**
    * ✅ Inject WebSocket gateway into fight processor after initialization
    * This avoids circular dependency issues
    */
   onModuleInit() {
+    this.logger.log('🚀 FightsModule.onModuleInit() called');
+    this.logger.log('📡 Injecting gateway into FightEngineProcessor...');
     this.fightEngineProcessor.setGateway(this.fightsGateway);
+    this.logger.log('✅ FightsModule initialization complete');
   }
 }
