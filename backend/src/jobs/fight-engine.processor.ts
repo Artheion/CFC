@@ -295,7 +295,7 @@ export class FightEngineProcessor implements OnModuleInit, OnModuleDestroy {
         cock1Health,
         cock2Health,
         durationMs: 15000, // Estimated duration for frontend animation
-        events: roundResult.events || [],
+        events: [], // Events not needed for basic replay
       });
 
       roundNumber++;
