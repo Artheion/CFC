@@ -86,9 +86,10 @@ const Spectate = () => {
       return;
     }
     
+    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api';
+    
     try {
       console.log('[Spectate] 📡 Fetching fight rounds...');
-      const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api';
       const response = await fetch(`${apiBase}/fights/${fightId}/rounds`);
       const data = await response.json();
       
@@ -155,7 +156,6 @@ const Spectate = () => {
       
       // Fight complete - notify backend
       console.log('[Spectate] ✅ All rounds complete, notifying backend...');
-      const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api';
       await fetch(`${apiBase}/fights/${fightId}/complete`, {
         method: 'POST',
         credentials: 'include',
