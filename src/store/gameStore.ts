@@ -1660,9 +1660,9 @@ export const useGameStore = create<GameStore>()(
     
     const state = get();
     const now = Date.now();
-    const CACHE_DURATION = 30000; // 30 seconds
+    const CACHE_DURATION = 2000; // 2 seconds (allow frequent polling for real-time updates)
     
-    // Skip if data was fetched recently (within 30s)
+    // Skip if data was fetched very recently (within 2s)
     if (now - state.lastFetchTimestamps.fights < CACHE_DURATION) {
       return;
     }

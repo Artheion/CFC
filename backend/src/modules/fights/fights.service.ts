@@ -251,6 +251,201 @@ export class FightsService {
     return updatedFight;
   }
 
+  /**
+   * Frontend calls this when all round animations complete
+   * This is when we mark fight as FINISHED and credit winner
+   */
+  async completeFightAnimations(fightId: string) {
+    console.log(`[FightsService] 🎬 Frontend completed animations for fight ${fightId}`);
+    
+    const fight = await this.prisma.fight.findUnique({
+      where: { id: fightId },
+      include: {
+        cock1: true,
+        cock2: true,
+        rounds: true,
+      },
+    });
+
+    if (!fight) {
+      throw new NotFoundException('Fight not found');
+    }
+
+    if (fight.status !== FightStatus.FIGHTING) {
+      throw new BadRequestException(`Fight is not in FIGHTING status (current: ${fight.status})`);
+    }
+
+    // Get winner from metadata (stored securely by backend)
+    const winnerFromMetadata = (fight.metadata as any)?._internalWinner;
+    
+    if (!winnerFromMetadata) {
+      throw new BadRequestException('Fight simulation not complete yet');
+    }
+
+    console.log(`[FightsService] ✅ Marking fight ${fightId} as FINISHED`);
+    console.log(`[FightsService] 🏆 Winner: ${winnerFromMetadata === fight.cock1.id ? fight.cock1.name : fight.cock2?.name}`);
+    console.log(`[FightsService] 🔒 SECURITY: Winner now publicly visible (animations complete)`);
+
+    // Mark as FINISHED and NOW set the winner (after animations complete)
+    const updatedFight = await this.prisma.fight.update({
+      where: { id: fightId },
+      data: {
+        status: FightStatus.FINISHED,
+        settledAt: new Date(),
+        winnerCockId: winnerFromMetadata, // ✅ NOW it's safe to expose the winner
+      },
+    });
+
+    // Now distribute rewards
+    console.log(`[FightsService] 💰 Distributing rewards...`);
+    await this.distributeFightRewards(fightId, winnerFromMetadata);
+
+    console.log(`[FightsService] ✅ Fight ${fightId} complete!`);
+    
+    return {
+      success: true,
+      fightId,
+      winnerId: winnerFromMetadata,
+      status: FightStatus.FINISHED,
+    };
+  }
+
+  /**
+   * Get fight rounds for replay
+   */
+  async getFightRounds(fightId: string) {
+    const fight = await this.prisma.fight.findUnique({
+      where: { id: fightId },
+      include: {
+        rounds: {
+          orderBy: { roundNo: 'asc' },
+        },
+        cock1: true,
+        cock2: true,
+      },
+    });
+
+    if (!fight) {
+      throw new NotFoundException('Fight not found');
+    }
+
+    // ✅ CALCULATE CURRENT ROUND AND PROGRESS
+    // This ensures everyone sees the same thing at the same time
+    let currentRound = 1;
+    let timeIntoCurrentRound = 0;
+    let currentCock1Health = 100;
+    let currentCock2Health = 100;
+    
+    if (fight.status === FightStatus.FIGHTING && fight.startedAt) {
+      const COUNTDOWN_MS = 5000; // 5 seconds countdown
+      const ROUND_DURATION_MS = 15000; // 15 seconds per round animation
+      const ROUND_BREAK_MS = 3000; // 3 seconds between rounds
+      
+      const elapsedMs = Date.now() - fight.startedAt.getTime();
+      const afterCountdown = Math.max(0, elapsedMs - COUNTDOWN_MS);
+      
+      // Calculate which round we're in based on time
+      const timePerRound = ROUND_DURATION_MS + ROUND_BREAK_MS;
+      const roundIndex = Math.floor(afterCountdown / timePerRound);
+      currentRound = Math.min(roundIndex + 1, fight.rounds.length);
+      timeIntoCurrentRound = afterCountdown % timePerRound;
+      
+      // Get health from previous round's end state
+      if (currentRound > 1 && fight.rounds[currentRound - 2]) {
+        const prevRound = fight.rounds[currentRound - 2];
+        currentCock1Health = prevRound.cock1Health;
+        currentCock2Health = prevRound.cock2Health;
+      }
+      
+      // If we're in the break between rounds, show previous round's final health
+      if (timeIntoCurrentRound > ROUND_DURATION_MS) {
+        const currentRoundData = fight.rounds[currentRound - 1];
+        if (currentRoundData) {
+          currentCock1Health = currentRoundData.cock1Health;
+          currentCock2Health = currentRoundData.cock2Health;
+        }
+      }
+    }
+
+    return {
+      fightId,
+      status: fight.status,
+      winnerId: fight.winnerCockId,
+      startedAt: fight.startedAt?.toISOString(),
+      
+      // ✅ CURRENT STATE (for sync)
+      currentRound,
+      timeIntoCurrentRound,
+      currentCock1Health,
+      currentCock2Health,
+      
+      cock1: {
+        id: fight.cock1.id,
+        name: fight.cock1.name,
+        image: fight.cock1.image,
+        attack: fight.cock1.attack,
+        defence: fight.cock1.defence,
+        speed: fight.cock1.speed,
+        stamina: fight.cock1.stamina,
+      },
+      cock2: fight.cock2 ? {
+        id: fight.cock2.id,
+        name: fight.cock2.name,
+        image: fight.cock2.image,
+        attack: fight.cock2.attack,
+        defence: fight.cock2.defence,
+        speed: fight.cock2.speed,
+        stamina: fight.cock2.stamina,
+      } : null,
+      rounds: fight.rounds.map(round => ({
+        roundNo: round.roundNo,
+        winnerId: round.winnerCock,
+        cock1Health: round.cock1Health,
+        cock2Health: round.cock2Health,
+        durationMs: round.durationMs,
+      })),
+      metadata: fight.metadata,
+    };
+  }
+
+  /**
+   * Distribute rewards after fight completes
+   */
+  private async distributeFightRewards(fightId: string, winnerId: string) {
+    // This logic will be moved from fight-engine.processor.ts
+    console.log(`[FightsService] 💰 TODO: Implement reward distribution for winner ${winnerId}`);
+    // For now, just update cock stats
+    const fight = await this.prisma.fight.findUnique({
+      where: { id: fightId },
+      include: { cock1: true, cock2: true },
+    });
+
+    if (!fight || !fight.cock1 || !fight.cock2) return;
+
+    const loserId = winnerId === fight.cock1.id ? fight.cock2.id : fight.cock1.id;
+    const wagerAmount = parseFloat(fight.wager.toString());
+
+    await this.prisma.$transaction([
+      // Update winner
+      this.prisma.cock.update({
+        where: { id: winnerId },
+        data: {
+          wins: { increment: 1 },
+          earningsCfc: { increment: wagerAmount },
+        },
+      }),
+      // Update loser
+      this.prisma.cock.update({
+        where: { id: loserId },
+        data: {
+          losses: { increment: 1 },
+        },
+      }),
+    ]);
+
+    console.log(`[FightsService] ✅ Rewards distributed`);
+  }
+
   async cancelFight(userId: string, fightId: string) {
     const fight = await this.prisma.fight.findUnique({
       where: { id: fightId },

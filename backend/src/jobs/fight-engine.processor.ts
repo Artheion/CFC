@@ -182,30 +182,60 @@ export class FightEngineProcessor implements OnModuleInit, OnModuleDestroy {
       },
     });
 
-    // ✅ BROADCAST: Fight is starting
-    if (this.gateway) {
-      this.logger.log(`[FightEngine] 📡 Broadcasting fight-starting event via WebSocket`);
-      this.gateway.emitFightStarting(fightId, {
-        cock1Id: fight.cock1.id,
-        cock2Id: fight.cock2.id,
-        fightSeed,
-      });
-    } else {
-      this.logger.error(`[FightEngine] ❌ Gateway not injected! Cannot broadcast WebSocket events!`);
-      this.logger.error(`[FightEngine]    Make sure FightsModule.onModuleInit() is calling setGateway()`);
-    }
-
     try {
-      // Process rounds sequentially in REAL-TIME
-      await this.processRoundsSequentially(fightId, fight.cock1, fight.cock2, fightSeed);
+      // ✅ SIMULATE ENTIRE FIGHT IMMEDIATELY - Store all results
+      console.log('[FightEngine] 🎲 Simulating entire fight deterministically...');
+      const fightResults = await this.simulateEntireFight(fightId, fight.cock1, fight.cock2, fightSeed);
+      
+      console.log('[FightEngine] ✅ Fight simulation complete');
+      console.log(`[FightEngine] Winner: ${fightResults.winnerId === fight.cock1.id ? fight.cock1.name : fight.cock2.name}`);
+      console.log(`[FightEngine] Rounds: ${fightResults.rounds.length}`);
+      
+      // ✅ SAVE ALL ROUNDS TO DATABASE
+      console.log('[FightEngine] 💾 Saving all rounds to database...');
+      await this.prisma.fightRound.createMany({
+        data: fightResults.rounds.map((round, index) => ({
+          fightId,
+          roundNo: index + 1,
+          winnerCock: round.winnerId,
+          cock1Health: round.cock1Health,
+          cock2Health: round.cock2Health,
+          durationMs: round.durationMs,
+        })),
+      });
+      
+      console.log('[FightEngine] ✅ All rounds saved');
+      
+      // ✅ MARK AS FIGHTING (not FINISHED yet!)
+      // ⚠️ SECURITY: DO NOT store winnerId here - people could cheat by seeing the winner before animations finish!
+      // Frontend will replay animations, then call complete endpoint which will set the winner
+      console.log('[FightEngine] ⚔️  Marking fight as FIGHTING (waiting for frontend to finish animations)...');
+      console.log('[FightEngine] 🔒 SECURITY: Winner NOT stored yet to prevent cheating');
+      await this.prisma.fight.update({
+        where: { id: fightId },
+        data: {
+          status: FightStatus.FIGHTING,
+          startedAt: new Date(),
+          // ⚠️ winnerCockId: NOT SET - will be set when frontend calls /complete
+          metadata: {
+            ...(typeof fight.metadata === 'object' && fight.metadata !== null ? fight.metadata : {}),
+            fightSeed: fightResults.seed,
+            simulationComplete: true,
+            simulatedAt: new Date().toISOString(),
+            // 🔒 Store winner securely in metadata (not exposed in API)
+            _internalWinner: fightResults.winnerId, // Only backend can read this
+          },
+        },
+      });
+      
+      console.log('[FightEngine] ✅ Fight simulation complete - waiting for frontend to finish animations');
+      console.log('[FightEngine] 📺 Frontend will poll for rounds and replay, then call /complete endpoint');
+      
     } catch (error) {
+      console.error(`[FightEngine] ❌ Error processing fight ${fightId}:`, error);
       this.logger.error(`Error processing fight ${fightId}:`, error);
       
-      if (this.gateway) {
-        this.gateway.emitFightError(fightId, { message: 'Fight processing error', code: 'FIGHT_ERROR' });
-      }
-      
-      // Mark fight as cancelled or errored
+      // Mark fight as cancelled on error
       await this.prisma.fight.update({
         where: { id: fightId },
         data: { status: FightStatus.CANCELLED },
@@ -214,34 +244,36 @@ export class FightEngineProcessor implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Process rounds one by one with delays for animation
-   * ✅ Real-time synchronization: All clients see rounds at the same time
+   * Simulate entire fight deterministically and return all round results
+   * ✅ Best Practice: Process everything, store results, let frontend replay animation
    */
-  private async processRoundsSequentially(fightId: string, cock1: Cock, cock2: Cock, seed: number) {
+  private async simulateEntireFight(fightId: string, cock1: Cock, cock2: Cock, seed: number): Promise<{
+    winnerId: string;
+    seed: number;
+    rounds: Array<{
+      winnerId: string;
+      cock1Health: number;
+      cock2Health: number;
+      durationMs: number;
+      events: any[];
+    }>;
+  }> {
     const seededRandom = createSeededRandom(seed);
     
     let cock1Health = 100;
     let cock2Health = 100;
     let cock1RoundWins = 0;
     let cock2RoundWins = 0;
-    let roundNumber = 1;
     const rounds: any[] = [];
 
-    this.logger.log(`[FightEngine] 🥊 Starting Best-of-3 rounds for fight ${fightId}`);
+    console.log(`[FightEngine] 🥊 Simulating Best-of-3 rounds`);
 
     // Best of 3: First to 2 wins
+    let roundNumber = 1;
     while (cock1RoundWins < 2 && cock2RoundWins < 2 && roundNumber <= 3) {
-      this.logger.log(`[FightEngine] ⚔️  Processing Round ${roundNumber}`);
+      console.log(`[FightEngine] ⚔️  Simulating Round ${roundNumber}`);
 
-      // ✅ BROADCAST: Round starting
-      if (this.gateway) {
-        this.gateway.emitRoundStart(fightId, { roundNumber });
-      }
-
-      // Wait 3 seconds for countdown animation
-      await this.delay(3000);
-
-      // Simulate this round
+      // Simulate this round INSTANTLY (no delays - we're not broadcasting)
       const roundResult = this.simulateRound(cock1, cock2, cock1Health, cock2Health, seededRandom);
       
       cock1Health = roundResult.cock1Health;
@@ -255,87 +287,64 @@ export class FightEngineProcessor implements OnModuleInit, OnModuleDestroy {
         cock2RoundWins++;
       }
 
-      const roundData = {
-        roundNo: roundNumber,
-        winnerCockId: roundWinnerId,
+      console.log(`[FightEngine] Round ${roundNumber} complete: ${roundWinnerId === cock1.id ? cock1.name : cock2.name} wins`);
+      console.log(`[FightEngine] Health: ${cock1.name}=${cock1Health} | ${cock2.name}=${cock2Health}`);
+
+      rounds.push({
+        winnerId: roundWinnerId,
         cock1Health,
         cock2Health,
-      };
-
-      rounds.push(roundData);
-
-      // Save round to database immediately
-      await this.prisma.fightRound.create({
-        data: {
-          fightId,
-          ...roundData,
-        },
+        durationMs: 15000, // Estimated duration for frontend animation
+        events: roundResult.events || [],
       });
 
-      // ✅ BROADCAST: Round complete - ALL clients animate this simultaneously
-      if (this.gateway) {
-        this.gateway.emitRoundComplete(fightId, {
-          roundNumber,
-          winnerId: roundWinnerId,
-          cock1Health,
-          cock2Health,
-          cock1Damage: 100 - cock1Health,
-          cock2Damage: 100 - cock2Health,
-        });
-      }
-
-      this.logger.log(`[FightEngine] ✅ Round ${roundNumber} complete - Winner: ${roundWinnerId} (${cock1RoundWins}-${cock2RoundWins})`);
-
-      // Wait 25 seconds for frontend animation to complete
-      await this.delay(25000);
-
+      roundNumber++;
+      
       // Reset health for next round (unless fight is over)
       if (cock1RoundWins < 2 && cock2RoundWins < 2) {
         cock1Health = 100;
         cock2Health = 100;
-        roundNumber++;
       }
     }
 
     // Determine overall winner
-    const overallWinnerId = cock1RoundWins > cock2RoundWins ? cock1.id : cock2.id;
+    const winnerId = cock1RoundWins > cock2RoundWins ? cock1.id : cock2.id;
+    console.log(`[FightEngine] 🏆 Fight complete! Winner: ${winnerId === cock1.id ? cock1.name : cock2.name}`);
+    console.log(`[FightEngine] Final score: ${cock1.name} ${cock1RoundWins} - ${cock2RoundWins} ${cock2.name}`);
 
-    this.logger.log(`[FightEngine] 🏆 Fight complete! Winner: ${overallWinnerId} (${cock1RoundWins}-${cock2RoundWins})`);
-
-    // ✅ BROADCAST: Fight finished
-    if (this.gateway) {
-      this.gateway.emitFightFinished(fightId, {
-        winnerId: overallWinnerId,
-        cock1RoundWins,
-        cock2RoundWins,
-        totalRounds: rounds.length,
-      });
-    }
-
-    // Wait 3 seconds for celebration animation
-    await this.delay(3000);
-
-    // NOW mark as finished and credit winner
-    await this.finalizeFight(fightId, overallWinnerId, cock1, cock2, rounds);
+    return {
+      winnerId,
+      seed,
+      rounds,
+    };
   }
 
   /**
-   * Finalize fight: Mark as FINISHED, update stats, credit winner
+   * Distribute rewards after fight ends
+   * Updates cock stats, handles spectator bets, referrals
    */
-  private async finalizeFight(fightId: string, winnerId: string, cock1: Cock, cock2: Cock, rounds: any[]) {
+  private async distributeFightRewards(fightId: string, winnerId: string) {
+    console.log(`[FightEngine] 💰 Distributing rewards for fight ${fightId}`);
     this.logger.log(`[FightEngine] 💰 Finalizing fight ${fightId} - Crediting winner ${winnerId}`);
 
     const fight = await this.prisma.fight.findUnique({
       where: { id: fightId },
-      include: { spectatorBets: true },
+      include: { 
+        spectatorBets: true,
+        cock1: true,
+        cock2: true,
+      },
     });
 
-    if (!fight) return;
+    if (!fight || !fight.cock1 || !fight.cock2) {
+      console.error('[FightEngine] ❌ Fight or cocks not found for reward distribution');
+      return;
+    }
 
-    const loserCockId = winnerId === cock1.id ? cock2.id : cock1.id;
+    const loserCockId = winnerId === fight.cock1.id ? fight.cock2.id : fight.cock1.id;
     
-    const winnerCock = winnerId === cock1.id ? cock1 : cock2;
-    const loserCock = loserCockId === cock1.id ? cock1 : cock2;
+    const winnerCock = winnerId === fight.cock1.id ? fight.cock1 : fight.cock2;
+    const loserCock = loserCockId === fight.cock1.id ? fight.cock1 : fight.cock2;
 
     await this.prisma.$transaction(async (tx) => {
       // Calculate winner earnings (wager from fight)
@@ -343,8 +352,8 @@ export class FightEngineProcessor implements OnModuleInit, OnModuleDestroy {
       // ✅ FIX: Winner earns opponent's wager (net profit), not total pot
       const netWinnings = wagerAmount; // Just the opponent's wager (net profit)
       
-      // Calculate energy/health loss based on rounds fought
-      const numRounds = rounds.length;
+      // Calculate energy/health loss based on rounds fought (assume 3 rounds max for Best-of-3)
+      const numRounds = 3;
       const energyCost = Math.min(winnerCock.energy, numRounds * 10); // 10 energy per round
       const healthCost = Math.min(winnerCock.health, numRounds * 5); // 5 health per round
       

@@ -131,6 +131,17 @@ export class FightsController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Post(':id/complete')
+  async completeFightAnimations(@Req() req: AuthenticatedRequest, @Param('id') fightId: string) {
+    return this.fightsService.completeFightAnimations(fightId);
+  }
+
+  @Get(':id/rounds')
+  async getFightRounds(@Param('id') fightId: string) {
+    return this.fightsService.getFightRounds(fightId);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get(':id/payout')
   async getPotentialPayout(@Req() req: AuthenticatedRequest, @Param('id') fightId: string) {
     if (!this.escrowService.isConfigured()) {

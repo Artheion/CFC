@@ -17,7 +17,7 @@ import { useEscrowContract } from '../hooks/useEscrowContract';
 import { formatCFC } from '../utils/formatNumber';
 import NetworkMismatchNotice from '../components/NetworkMismatchNotice';
 import { hasValidAuth, authenticateWithWallet } from '../utils/apiClient';
-import { useFightWebSocket } from '../hooks/useFightWebSocket';
+// WebSocket removed - using polling for fight updates
 
 const Spectate = () => {
   const { t } = useTranslation();
@@ -27,16 +27,6 @@ const Spectate = () => {
   const { address, isCorrectNetwork, provider } = useWalletContext();
   const { cfcBalance } = useWalletBalance();
   const { placeBet: placeBetOnContract, loading: escrowLoading, error: escrowError, isConfigured: escrowConfigured } = useEscrowContract();
-  
-  // ✅ REAL-TIME: Connect to WebSocket for synchronized fight updates
-  const { isConnected, fightStarting, roundStart, roundComplete, fightFinished, error: wsError } = useFightWebSocket(fightId);
-  
-  // WebSocket error handling
-  useEffect(() => {
-    if (wsError) {
-      console.error('[Spectate] WebSocket error:', wsError);
-    }
-  }, [wsError]);
   
   const [selectedWinner, setSelectedWinner] = useState<string>('');
   const [betAmount, setBetAmount] = useState('');
@@ -84,19 +74,10 @@ const Spectate = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // ✅ REAL-TIME: Handle fight starting event
-  useEffect(() => {
-    if (!fightStarting) return;
-    
-    console.log('[Spectate] 🎮 Fight starting!', fightStarting);
-    setArenaPhase('idle');
-    setAnimatedRounds([]);
-    setCurrentAnimatedRound(0);
-    setDisplayHealth({ cock1: 100, cock2: 100 });
-  }, [fightStarting]);
+  // Removed - using polling instead
 
-  // ✅ REAL-TIME: Handle round start event
-  useEffect(() => {
+  // Removed WebSocket round start handler
+  /*useEffect(() => {
     if (!roundStart) return;
     
     console.log('[Spectate] ⚔️  Round starting:', roundStart.roundNumber);
@@ -120,10 +101,10 @@ const Spectate = () => {
     }, 1000);
     
     return () => clearInterval(countdownInterval);
-  }, [roundStart]);
+  }, [roundStart]);*/
 
-  // ✅ REAL-TIME: Handle round complete event (CRITICAL - syncs all clients)
-  useEffect(() => {
+  // Removed - using polling instead
+  /*useEffect(() => {
     if (!roundComplete || !cock1 || !cock2) return;
     
     console.log('[Spectate] ✅ Round complete:', roundComplete);
@@ -175,39 +156,13 @@ const Spectate = () => {
     }, updateInterval);
     
     return () => clearInterval(animationInterval);
-  }, [roundComplete, cock1, cock2, displayHealth]);
+  }, [roundComplete, cock1, cock2, displayHealth]);*/
 
-  // ✅ REAL-TIME: Handle fight finished event
-  useEffect(() => {
-    if (!fightFinished || !cock1 || !cock2 || !fightId) return;
-    
-    console.log('[Spectate] 🏆 Fight finished! Winner:', fightFinished.winnerId);
-    
-    // Wait for final animation
-    setTimeout(() => {
-      setKnockoutInfo({
-        winnerId: fightFinished.winnerId,
-        loserId: fightFinished.winnerId === cock1.id ? cock2.id : cock1.id,
-      });
-      setArenaPhase('finished');
-      setFightPhase('finished');
-      
-      // Update fight status in store
-      updateFightById(fightId, {
-        status: 'finished',
-        winnerId: fightFinished.winnerId,
-      });
-    }, 3000);
-  }, [fightFinished, cock1, cock2, fightId, updateFightById]);
+  // Removed - using polling instead
 
-  // ✅ REAL-TIME: Show WebSocket errors
-  useEffect(() => {
-    if (wsError) {
-      console.error('[Spectate] WebSocket error:', wsError);
-    }
-  }, [wsError]);
+  // Removed - no WebSocket
 
-  // ✅ REMOVED: startRound() and endFight() functions - backend now controls timing via WebSocket
+  // Note: Fight progression controlled by backend, frontend just displays current state
 
   // Calculate mutual parley odds
   const calculateOdds = () => {
@@ -393,14 +348,19 @@ const Spectate = () => {
               <span>←</span>
               <span>{t('spectate.backToArena')}</span>
             </button>
-            
-            {/* 🐛 DEBUG: WebSocket Connection Status */}
-            <div className={`flex items-center gap-2 px-3 py-1 rounded text-xs font-medium ${
-              isConnected ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'
-            }`}>
-              <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400' : 'bg-yellow-400 animate-pulse'}`} />
-              {isConnected ? 'Live Connected' : 'Connecting...'}
-            </div>
+
+            {/* ✅ Winner Announcement */}
+            {fight.status === 'finished' && fight.winnerId && (
+              <div className="bg-primary/20 border-2 border-primary px-6 py-3 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-white/80">WINNER:</span>
+                  <span className="text-2xl font-bold text-primary">
+                    {fight.winnerId === cock1?.id ? cock1.name : cock2?.name}
+                  </span>
+                  <span className="text-3xl">🏆</span>
+                </div>
+              </div>
+            )}
           </div>
           
           <div className="flex items-start justify-between gap-8">
@@ -410,6 +370,10 @@ const Spectate = () => {
                 <HolographicCard
                   {...getCockHolographicConfig(cock1.rarity)}
                   className={`relative h-16 w-16 flex-shrink-0 overflow-hidden border-2 cursor-pointer transition-transform hover:scale-110 ${
+                    fight.status === 'finished' && fight.winnerId === cock1.id 
+                      ? 'ring-4 ring-primary shadow-lg shadow-primary/50' 
+                      : ''
+                  } ${
                     cock1.rarity === 'legendary' ? 'border-rarity-legendary' :
                     cock1.rarity === 'epic' ? 'border-rarity-epic' :
                     cock1.rarity === 'rare' ? 'border-rarity-rare' :
@@ -426,7 +390,16 @@ const Spectate = () => {
                   <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
                 </HolographicCard>
                 <div>
-                  <p className="text-lg font-bold text-white">{cock1.name}</p>
+                  <p className={`text-lg font-bold ${
+                    fight.status === 'finished' && fight.winnerId === cock1.id 
+                      ? 'text-primary' 
+                      : 'text-white'
+                  }`}>
+                    {cock1.name}
+                  </p>
+                  {fight.status === 'finished' && fight.winnerId === cock1.id && (
+                    <p className="text-xs text-primary font-bold">WINNER</p>
+                  )}
                   <p className={`text-sm ${
                     cock1.rarity === 'legendary' ? 'text-rarity-legendary' :
                     cock1.rarity === 'epic' ? 'text-rarity-epic' :
@@ -478,7 +451,16 @@ const Spectate = () => {
             <div className="w-1/3 bg-card-dark p-4 text-right">
               <div className="flex items-center justify-end gap-4">
                 <div>
-                  <p className="text-lg font-bold text-white">{cock2.name}</p>
+                  <p className={`text-lg font-bold ${
+                    fight.status === 'finished' && fight.winnerId === cock2.id 
+                      ? 'text-primary' 
+                      : 'text-white'
+                  }`}>
+                    {cock2.name}
+                  </p>
+                  {fight.status === 'finished' && fight.winnerId === cock2.id && (
+                    <p className="text-xs text-primary font-bold">WINNER</p>
+                  )}
                   <p className={`text-sm ${
                     cock2.rarity === 'legendary' ? 'text-rarity-legendary' :
                     cock2.rarity === 'epic' ? 'text-rarity-epic' :
@@ -491,6 +473,10 @@ const Spectate = () => {
                 <HolographicCard
                   {...getCockHolographicConfig(cock2.rarity)}
                   className={`relative h-16 w-16 flex-shrink-0 overflow-hidden border-2 cursor-pointer transition-transform hover:scale-110 ${
+                    fight.status === 'finished' && fight.winnerId === cock2.id 
+                      ? 'ring-4 ring-primary shadow-lg shadow-primary/50' 
+                      : ''
+                  } ${
                     cock2.rarity === 'legendary' ? 'border-rarity-legendary' :
                     cock2.rarity === 'epic' ? 'border-rarity-epic' :
                     cock2.rarity === 'rare' ? 'border-rarity-rare' :

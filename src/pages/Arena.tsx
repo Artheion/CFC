@@ -163,9 +163,20 @@ const Arena = () => {
   const [showInfo, setShowInfo] = useState(false);
   const [showCombatInfo, setShowCombatInfo] = useState(false);
 
-  // Load fights data when page mounts
+  // ✅ Load fights data on mount and poll every 3 seconds for real-time updates
   useEffect(() => {
+    // Load immediately
     void loadFightsData();
+    
+    // Poll every 3 seconds to keep fight queue fresh
+    const pollInterval = setInterval(() => {
+      void loadFightsData();
+    }, 3000);
+    
+    // Cleanup on unmount
+    return () => {
+      clearInterval(pollInterval);
+    };
   }, [loadFightsData]);
 
   const {
