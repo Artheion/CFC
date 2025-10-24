@@ -1,5 +1,5 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, FightStatus } from '@prisma/client';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Prisma, FightStatus, SpectatorBetStatus } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '@infra/prisma/prisma.service';
 import { QueueService } from '@infra/queue/queue.service';
@@ -48,6 +48,7 @@ const FULL_FIGHT_INCLUDE: Prisma.FightInclude = {
 
 @Injectable()
 export class FightsService {
+  private readonly logger = new Logger(FightsService.name);
   private static readonly DEFAULT_HOUSE_RAKE_BPS = 700; // 7%
 
   constructor(
@@ -420,6 +421,7 @@ export class FightsService {
         spectatorBets: true,
         cock1: true,
         cock2: true,
+      },
     });
 
     if (!fight || !fight.cock1 || !fight.cock2) {
