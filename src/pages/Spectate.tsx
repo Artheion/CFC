@@ -74,133 +74,172 @@ const Spectate = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // ✅ REPLAY FUNCTION
-  const playFightReplay = async () => {
-    if (!fightId || !fight) return;
-    
-    const c1 = fight?.cock1 || cocks.find(c => c.id === fight?.cock1Id);
-    const c2 = fight?.cock2 || cocks.find(c => c.id === fight?.cock2Id);
-    
-    if (!c1 || !c2) {
-      console.error('[Spectate] Cannot replay - missing cock data');
+  // ✅ Start animating a specific round
+  const startRound = (roundNumber: number) => {
+    if (!fight || !cock1 || !cock2 || !fight.rounds) return;
+
+    // Get backend round (the source of truth!)
+    const backendRound = fight.rounds[roundNumber - 1];
+    if (!backendRound) {
+      console.error(`[Animation] No backend round found for round ${roundNumber}`);
+      // If all rounds animated, complete the fight
+      if (roundNumber > fight.rounds.length) {
+        completeFightAnimation();
+      }
       return;
     }
+
+    console.log(`[Animation] Animating Round ${roundNumber} (winner: ${backendRound.winnerId === cock1.id ? cock1.name : cock2.name})`);
+
+    // Reset display health to 100 for new round
+    setDisplayHealth({ cock1: 100, cock2: 100 });
+    setCurrentAnimatedRound(roundNumber);
+
+    // Facing phase - 5 second countdown
+    setArenaPhase('facing');
+    setArenaCountdown(5);
+    setKnockoutInfo(null);
+    setFightPhase(`round${roundNumber}` as any);
+
+    let countdown = 5;
+    const countdownInterval = setInterval(() => {
+      countdown--;
+      if (countdown >= 1) {
+        setArenaCountdown(countdown);
+      } else {
+        clearInterval(countdownInterval);
+        setArenaCountdown(null);
+      }
+    }, 1000);
+
+    // Start animating health bars after 5 seconds
+    setTimeout(() => {
+      setArenaPhase('fighting');
+      clearInterval(countdownInterval);
+      setArenaCountdown(null);
+
+      // Animate health bars smoothly to backend values
+      let currentCock1Health = 100;
+      let currentCock2Health = 100;
+      const targetCock1Health = backendRound.cock1Health;
+      const targetCock2Health = backendRound.cock2Health;
+
+      // Calculate animation parameters
+      const cock1HealthDrop = 100 - targetCock1Health;
+      const cock2HealthDrop = 100 - targetCock2Health;
+      const maxHealthDrop = Math.max(cock1HealthDrop, cock2HealthDrop);
+      const animationDuration = Math.max(15000, maxHealthDrop * 150); // At least 15 seconds
+      const updateInterval = 150;
+      const stepsNeeded = Math.ceil(animationDuration / updateInterval);
+      const cock1HealthDropPerStep = cock1HealthDrop / stepsNeeded;
+      const cock2HealthDropPerStep = cock2HealthDrop / stepsNeeded;
+
+      let currentStep = 0;
+      const animationInterval = setInterval(() => {
+        currentStep++;
+
+        // Gradually decrease health to match backend result
+        currentCock1Health = Math.max(targetCock1Health, 100 - (cock1HealthDropPerStep * currentStep));
+        currentCock2Health = Math.max(targetCock2Health, 100 - (cock2HealthDropPerStep * currentStep));
+
+        setDisplayHealth({
+          cock1: Math.round(currentCock1Health),
+          cock2: Math.round(currentCock2Health),
+        });
+
+        // Animation complete when both reach target values
+        if (currentCock1Health <= targetCock1Health && currentCock2Health <= targetCock2Health) {
+          clearInterval(animationInterval);
+
+          // Use backend winner
+          const roundWinnerId = backendRound.winnerId;
+          const roundLoserId = roundWinnerId === cock1.id ? cock2.id : cock1.id;
+
+          // Show knockout animation
+          setKnockoutInfo({ winnerId: roundWinnerId, loserId: roundLoserId });
+          setArenaPhase('between');
+
+          // Add round to animated rounds
+          const completedRound: FightRound = {
+            roundNumber,
+            winnerId: roundWinnerId,
+            cock1Damage: Math.round(100 - targetCock1Health),
+            cock2Damage: Math.round(100 - targetCock2Health),
+            cock1Health: targetCock1Health,
+            cock2Health: targetCock2Health,
+          };
+
+          setAnimatedRounds(prev => [...prev, completedRound]);
+
+          // Calculate wins
+          const allRounds = [...animatedRounds, completedRound];
+          const cock1Wins = allRounds.filter(r => r.winnerId === cock1.id).length;
+          const cock2Wins = allRounds.filter(r => r.winnerId === cock2.id).length;
+
+          console.log(`[Animation] Round ${roundNumber} winner: ${roundWinnerId === cock1.id ? cock1.name : cock2.name}`);
+          console.log(`[Animation] Score: ${cock1.name} ${cock1Wins} - ${cock2Wins} ${cock2.name}`);
+
+          // Check if fight is over (best of 3 - first to 2 wins)
+          if (cock1Wins >= 2 || cock2Wins >= 2 || roundNumber >= fight.rounds.length) {
+            console.log('[Animation] Fight complete!');
+            setTimeout(() => {
+              setArenaPhase('finished');
+              setFightPhase('finished');
+              completeFightAnimation();
+            }, 3000);
+          } else {
+            // Continue to next round
+            setTimeout(() => {
+              startRound(roundNumber + 1);
+            }, 3000);
+          }
+        }
+      }, updateInterval);
+    }, 5000); // 5 second countdown
+  };
+
+  // ✅ Notify backend that animations are complete
+  const completeFightAnimation = async () => {
+    if (!fightId) return;
     
     const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api';
     
     try {
-      console.log('[Spectate] 📡 Fetching fight rounds...');
-      const response = await fetch(`${apiBase}/fights/${fightId}/rounds`);
-      const data = await response.json();
-      
-      console.log('[Spectate] ✅ Received rounds:', data.rounds.length);
-      
-      // Show countdown
-      setArenaPhase('facing');
-      for (let i = 5; i > 0; i--) {
-        setArenaCountdown(i);
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-      setArenaCountdown(null);
-      
-      // Play each round
-      for (let i = 0; i < data.rounds.length; i++) {
-        const round = data.rounds[i];
-        console.log(`[Spectate] ⚔️  Playing round ${round.roundNo}`);
-        
-        setCurrentAnimatedRound(round.roundNo);
-        setFightPhase(`round${round.roundNo}` as any);
-        setArenaPhase('fighting');
-        
-        // Animate health bars over 15 seconds
-        const startHealth = { 
-          cock1: i === 0 ? 100 : data.rounds[i-1].cock1Health,
-          cock2: i === 0 ? 100 : data.rounds[i-1].cock2Health,
-        };
-        
-        const animationDuration = 15000;
-        const updateInterval = 100;
-        const steps = animationDuration / updateInterval;
-        
-        for (let step = 0; step <= steps; step++) {
-          const progress = step / steps;
-          setDisplayHealth({
-            cock1: Math.round(startHealth.cock1 - (startHealth.cock1 - round.cock1Health) * progress),
-            cock2: Math.round(startHealth.cock2 - (startHealth.cock2 - round.cock2Health) * progress),
-          });
-          await new Promise(resolve => setTimeout(resolve, updateInterval));
-        }
-        
-        // Set final health
-        setDisplayHealth({
-          cock1: round.cock1Health,
-          cock2: round.cock2Health,
-        });
-        
-        // Show round winner
-        setArenaPhase('between');
-        setKnockoutInfo({
-          winnerId: round.winnerId,
-          loserId: round.winnerId === data.cock1.id ? data.cock2.id : data.cock1.id,
-        });
-        
-        // Wait 3 seconds between rounds
-        await new Promise(resolve => setTimeout(resolve, 3000));
-        
-        // Reset health for next round
-        if (i < data.rounds.length - 1) {
-          setDisplayHealth({ cock1: 100, cock2: 100 });
-          setKnockoutInfo(null);
-        }
-      }
-      
-      // Fight complete - notify backend
-      console.log('[Spectate] ✅ All rounds complete, notifying backend...');
+      console.log('[Spectate] ✅ Notifying backend fight animations complete...');
       await fetch(`${apiBase}/fights/${fightId}/complete`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
       });
       
-      setArenaPhase('finished');
-      setFightPhase('finished');
-      
       // Refresh to get winner
       await refreshBackendState();
-      
     } catch (error) {
-      console.error('[Spectate] ❌ Error playing fight replay:', error);
+      console.error('[Spectate] ❌ Error completing fight:', error);
     }
   };
 
-  // ✅ TRIGGER REPLAY when fight starts
+  // ✅ Initialize arena state based on fight status
   useEffect(() => {
-    if (!fight || !fightId) return;
-    
-    // Get cocks for this effect
-    const c1 = fight?.cock1 || cocks.find(c => c.id === fight?.cock1Id);
-    const c2 = fight?.cock2 || cocks.find(c => c.id === fight?.cock2Id);
-    
+    if (!fight || !cock1 || !cock2) return;
+
     if (fight.status === 'betting') {
-      setFightPhase('betting');
+      console.log('[Spectate] Fight in betting phase');
       setArenaPhase('idle');
+      setFightPhase('betting');
+      setAnimatedRounds([]);
+      setCurrentAnimatedRound(0);
       setDisplayHealth({ cock1: 100, cock2: 100 });
       setAnimationStarted(false);
-    } else if (fight.status === 'fighting' && !animationStarted && c1 && c2) {
-      console.log('[Spectate] 🎬 Fight is FIGHTING - starting replay...');
-      setAnimationStarted(true);
-      void playFightReplay();
-    } else if (fight.status === 'finished') {
-      setFightPhase('finished');
-      setArenaPhase('finished');
-      if (fight.winnerId && c1 && c2) {
-        setKnockoutInfo({
-          winnerId: fight.winnerId,
-          loserId: fight.winnerId === c1.id ? c2.id : c1.id,
-        });
+    } else if ((fight.status === 'fighting' || fight.status === 'finished') && fight.rounds && fight.rounds.length > 0) {
+      // Animate rounds when backend simulation is complete
+      if (!animationStarted) {
+        console.log('[Spectate] Fight rounds ready - starting animation');
+        setAnimationStarted(true);
+        startRound(1);
       }
     }
-  }, [fight?.status, fight?.winnerId, fightId, animationStarted, cocks]);
+  }, [fight?.status, fight?.rounds?.length, animationStarted, cock1, cock2]);
 
   // Removed - using polling instead
 

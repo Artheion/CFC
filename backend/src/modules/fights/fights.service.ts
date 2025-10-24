@@ -412,38 +412,105 @@ export class FightsService {
    * Distribute rewards after fight completes
    */
   private async distributeFightRewards(fightId: string, winnerId: string) {
-    // This logic will be moved from fight-engine.processor.ts
-    console.log(`[FightsService] 💰 TODO: Implement reward distribution for winner ${winnerId}`);
-    // For now, just update cock stats
+    console.log(`[FightsService] 💰 Distributing rewards for fight ${fightId}`);
+    
     const fight = await this.prisma.fight.findUnique({
       where: { id: fightId },
-      include: { cock1: true, cock2: true },
+      include: { 
+        spectatorBets: true,
+        cock1: true,
+        cock2: true,
     });
 
-    if (!fight || !fight.cock1 || !fight.cock2) return;
+    if (!fight || !fight.cock1 || !fight.cock2) {
+      console.error('[FightsService] ❌ Fight or cocks not found for reward distribution');
+      return;
+    }
 
-    const loserId = winnerId === fight.cock1.id ? fight.cock2.id : fight.cock1.id;
-    const wagerAmount = parseFloat(fight.wager.toString());
+    const loserCockId = winnerId === fight.cock1.id ? fight.cock2.id : fight.cock1.id;
+    const winnerCock = winnerId === fight.cock1.id ? fight.cock1 : fight.cock2;
+    const loserCock = loserCockId === fight.cock1.id ? fight.cock1 : fight.cock2;
 
-    await this.prisma.$transaction([
-      // Update winner
-      this.prisma.cock.update({
+    await this.prisma.$transaction(async (tx) => {
+      // Calculate winner earnings (opponent's wager = net profit)
+      const wagerAmount = parseFloat(fight.wager.toString());
+      const netWinnings = wagerAmount;
+
+      // Calculate energy/health loss (3 rounds max for Best-of-3)
+      const numRounds = 3;
+      const energyCost = Math.min(winnerCock.energy, numRounds * 10);
+      const healthCost = Math.min(winnerCock.health, numRounds * 5);
+
+      // Update winner stats
+      await tx.cock.update({
         where: { id: winnerId },
         data: {
           wins: { increment: 1 },
-          earningsCfc: { increment: wagerAmount },
+          earningsCfc: { increment: netWinnings },
+          energy: Math.max(0, winnerCock.energy - energyCost),
+          health: Math.max(0, winnerCock.health - healthCost),
+          lastRecoveryAt: new Date(),
+          energyUpdatedAt: new Date(),
+          healthUpdatedAt: new Date(),
         },
-      }),
-      // Update loser
-      this.prisma.cock.update({
-        where: { id: loserId },
+      });
+
+      // Update loser stats
+      const loserEnergyCost = Math.min(loserCock.energy, numRounds * 15);
+      const loserHealthCost = Math.min(loserCock.health, numRounds * 10);
+
+      await tx.cock.update({
+        where: { id: loserCockId },
         data: {
           losses: { increment: 1 },
+          energy: Math.max(0, loserCock.energy - loserEnergyCost),
+          health: Math.max(0, loserCock.health - loserHealthCost),
+          lastRecoveryAt: new Date(),
+          energyUpdatedAt: new Date(),
+          healthUpdatedAt: new Date(),
         },
-      }),
-    ]);
+      });
 
-    console.log(`[FightsService] ✅ Rewards distributed`);
+      // Process spectator bets
+      const winningBets = fight.spectatorBets.filter(bet => bet.cockId === winnerId);
+      const losingBets = fight.spectatorBets.filter(bet => bet.cockId === loserCockId);
+
+      const totalWinningBetAmount = winningBets.reduce((sum, bet) => sum + parseFloat(bet.amount.toString()), 0);
+      const totalLosingBetAmount = losingBets.reduce((sum, bet) => sum + parseFloat(bet.amount.toString()), 0);
+      const totalSpectatorPool = totalWinningBetAmount + totalLosingBetAmount;
+
+      console.log(`[FightsService] 💰 Bet pool: ${totalSpectatorPool} (Winners: ${totalWinningBetAmount}, Losers: ${totalLosingBetAmount})`);
+
+      // Pay out winning bettors proportionally
+      for (const bet of winningBets) {
+        const betAmount = parseFloat(bet.amount.toString());
+        const betShare = totalWinningBetAmount > 0 ? betAmount / totalWinningBetAmount : 0;
+        const payout = betAmount + (totalLosingBetAmount * betShare); // Return bet + share of losing bets
+
+        await tx.spectatorBet.update({
+          where: { id: bet.id },
+          data: {
+            status: SpectatorBetStatus.WON,
+            payoutAmount: new Prisma.Decimal(payout),
+          },
+        });
+
+        console.log(`[FightsService] ✅ Bettor ${bet.userId} won ${payout} CFC (bet: ${betAmount})`);
+      }
+
+      // Mark losing bets
+      for (const bet of losingBets) {
+        await tx.spectatorBet.update({
+          where: { id: bet.id },
+          data: {
+            status: SpectatorBetStatus.LOST,
+            payoutAmount: new Prisma.Decimal(0),
+          },
+        });
+      }
+    });
+
+    this.logger.log(`Fight ${fightId} payouts processed successfully`);
   }
 
   async cancelFight(userId: string, fightId: string) {
