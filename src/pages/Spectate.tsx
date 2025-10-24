@@ -74,6 +74,120 @@ const Spectate = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // ✅ REPLAY FUNCTION
+  const playFightReplay = async () => {
+    if (!fightId || !cock1 || !cock2) return;
+    
+    try {
+      console.log('[Spectate] 📡 Fetching fight rounds...');
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'}/api/fights/${fightId}/rounds`);
+      const data = await response.json();
+      
+      console.log('[Spectate] ✅ Received rounds:', data.rounds.length);
+      
+      // Show countdown
+      setArenaPhase('facing');
+      for (let i = 5; i > 0; i--) {
+        setArenaCountdown(i);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+      setArenaCountdown(null);
+      
+      // Play each round
+      for (let i = 0; i < data.rounds.length; i++) {
+        const round = data.rounds[i];
+        console.log(`[Spectate] ⚔️  Playing round ${round.roundNo}`);
+        
+        setCurrentAnimatedRound(round.roundNo);
+        setFightPhase(`round${round.roundNo}` as any);
+        setArenaPhase('fighting');
+        
+        // Animate health bars over 15 seconds
+        const startHealth = { 
+          cock1: i === 0 ? 100 : data.rounds[i-1].cock1Health,
+          cock2: i === 0 ? 100 : data.rounds[i-1].cock2Health,
+        };
+        
+        const animationDuration = 15000;
+        const updateInterval = 100;
+        const steps = animationDuration / updateInterval;
+        
+        for (let step = 0; step <= steps; step++) {
+          const progress = step / steps;
+          setDisplayHealth({
+            cock1: Math.round(startHealth.cock1 - (startHealth.cock1 - round.cock1Health) * progress),
+            cock2: Math.round(startHealth.cock2 - (startHealth.cock2 - round.cock2Health) * progress),
+          });
+          await new Promise(resolve => setTimeout(resolve, updateInterval));
+        }
+        
+        // Set final health
+        setDisplayHealth({
+          cock1: round.cock1Health,
+          cock2: round.cock2Health,
+        });
+        
+        // Show round winner
+        setArenaPhase('between');
+        setKnockoutInfo({
+          winnerId: round.winnerId,
+          loserId: round.winnerId === data.cock1.id ? data.cock2.id : data.cock1.id,
+        });
+        
+        // Wait 3 seconds between rounds
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        // Reset health for next round
+        if (i < data.rounds.length - 1) {
+          setDisplayHealth({ cock1: 100, cock2: 100 });
+          setKnockoutInfo(null);
+        }
+      }
+      
+      // Fight complete - notify backend
+      console.log('[Spectate] ✅ All rounds complete, notifying backend...');
+      await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'}/api/fights/${fightId}/complete`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      
+      setArenaPhase('finished');
+      setFightPhase('finished');
+      
+      // Refresh to get winner
+      await refreshBackendState();
+      
+    } catch (error) {
+      console.error('[Spectate] ❌ Error playing fight replay:', error);
+    }
+  };
+
+  // ✅ TRIGGER REPLAY when fight starts
+  useEffect(() => {
+    if (!fight || !fightId) return;
+    
+    if (fight.status === 'betting') {
+      setFightPhase('betting');
+      setArenaPhase('idle');
+      setDisplayHealth({ cock1: 100, cock2: 100 });
+      setAnimationStarted(false);
+    } else if (fight.status === 'fighting' && !animationStarted && cock1 && cock2) {
+      console.log('[Spectate] 🎬 Fight is FIGHTING - starting replay...');
+      setAnimationStarted(true);
+      void playFightReplay();
+    } else if (fight.status === 'finished') {
+      setFightPhase('finished');
+      setArenaPhase('finished');
+      if (fight.winnerId && cock1 && cock2) {
+        setKnockoutInfo({
+          winnerId: fight.winnerId,
+          loserId: fight.winnerId === cock1.id ? cock2.id : cock1.id,
+        });
+      }
+    }
+  }, [fight?.status, fight?.winnerId, fightId, animationStarted, cock1, cock2]);
+
   // Removed - using polling instead
 
   // Removed WebSocket round start handler
