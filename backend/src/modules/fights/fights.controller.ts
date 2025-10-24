@@ -3,6 +3,7 @@ import type { Request } from 'express';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { PrismaService } from '@infra/prisma/prisma.service';
 import { EscrowService } from '@infra/escrow/escrow.service';
+import { JOB_QUEUE_NAMES } from '@jobs/index';
 import { FightsService } from './fights.service';
 import { CreateFightDto } from './dto/create-fight.dto';
 import { JoinFightDto } from './dto/join-fight.dto';
@@ -68,7 +69,7 @@ export class FightsController {
     
     // Manually add job to queue with NO delay for testing
     const job = await this.fightsService['queueService']
-      .getQueue('FIGHT_ENGINE')
+      .getQueue(JOB_QUEUE_NAMES.FIGHT_ENGINE)
       .add('start-fight', { fightId }, { 
         jobId: `debug-${fightId}-${Date.now()}`,
         delay: 0, // Process immediately
