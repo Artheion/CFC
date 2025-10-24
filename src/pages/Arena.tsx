@@ -690,13 +690,17 @@ const Arena = () => {
                               <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-transparent" />
                             </HolographicCard>
                             <p className="font-bold text-white">{cock1.name}</p>
-                            <p className={`text-sm font-bold ${
-                              fight.status === 'finished' && fight.winnerId === cock1.id 
-                                ? 'text-primary' 
-                                : 'text-white/60'
-                            }`}>
-                              Score: {cock1Wins}
-                            </p>
+                            {fight.status === 'finished' ? (
+                              <p className={`text-sm font-bold ${
+                                fight.winnerId === cock1.id ? 'text-primary' : 'text-white/60'
+                              }`}>
+                                Score: {cock1Wins}
+                              </p>
+                            ) : fight.status === 'fighting' ? (
+                              <p className="text-sm font-bold text-yellow-400">FIGHTING...</p>
+                            ) : (
+                              <p className="text-sm font-bold text-white/60">Ready</p>
+                            )}
                           </div>
 
                           <div className="flex flex-col items-center gap-2 text-center">
@@ -713,11 +717,17 @@ const Arena = () => {
                               <p className="font-bold text-primary">{formatCFC(isNaN(totalWagerVolume) ? 0 : totalWagerVolume)} $CFC</p>
                             </div>
                             
-                            {/* Score Display */}
-                            {fight.rounds.length > 0 && (
+                            {/* Score Display - only for finished fights */}
+                            {fight.status === 'finished' && fight.rounds.length > 0 && (
                               <div className="text-center">
                                 <p className="text-xs text-white/60">{t('arena.bestOf3')}</p>
                                 <p className="text-lg font-bold text-white">{cock1Wins} - {cock2Wins}</p>
+                              </div>
+                            )}
+                            {fight.status === 'fighting' && (
+                              <div className="text-center">
+                                <p className="text-xs text-white/60">{t('arena.bestOf3')}</p>
+                                <p className="text-lg font-bold text-yellow-400">IN PROGRESS</p>
                               </div>
                             )}
                             
@@ -748,13 +758,17 @@ const Arena = () => {
                               <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-transparent" />
                             </HolographicCard>
                             <p className="font-bold text-white">{cock2.name}</p>
-                            <p className={`text-sm font-bold ${
-                              fight.status === 'finished' && fight.winnerId === cock2.id 
-                                ? 'text-primary' 
-                                : 'text-white/60'
-                            }`}>
-                              Score: {cock2Wins}
-                            </p>
+                            {fight.status === 'finished' ? (
+                              <p className={`text-sm font-bold ${
+                                fight.winnerId === cock2.id ? 'text-primary' : 'text-white/60'
+                              }`}>
+                                Score: {cock2Wins}
+                              </p>
+                            ) : fight.status === 'fighting' ? (
+                              <p className="text-sm font-bold text-yellow-400">FIGHTING...</p>
+                            ) : (
+                              <p className="text-sm font-bold text-white/60">Ready</p>
+                            )}
                           </div>
                         </div>
                       </div>

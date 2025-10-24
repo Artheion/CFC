@@ -76,11 +76,20 @@ const Spectate = () => {
 
   // ✅ REPLAY FUNCTION
   const playFightReplay = async () => {
-    if (!fightId || !cock1 || !cock2) return;
+    if (!fightId || !fight) return;
+    
+    const c1 = fight?.cock1 || cocks.find(c => c.id === fight?.cock1Id);
+    const c2 = fight?.cock2 || cocks.find(c => c.id === fight?.cock2Id);
+    
+    if (!c1 || !c2) {
+      console.error('[Spectate] Cannot replay - missing cock data');
+      return;
+    }
     
     try {
       console.log('[Spectate] 📡 Fetching fight rounds...');
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'}/api/fights/${fightId}/rounds`);
+      const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api';
+      const response = await fetch(`${apiBase}/fights/${fightId}/rounds`);
       const data = await response.json();
       
       console.log('[Spectate] ✅ Received rounds:', data.rounds.length);
@@ -146,7 +155,8 @@ const Spectate = () => {
       
       // Fight complete - notify backend
       console.log('[Spectate] ✅ All rounds complete, notifying backend...');
-      await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'}/api/fights/${fightId}/complete`, {
+      const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api';
+      await fetch(`${apiBase}/fights/${fightId}/complete`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -167,26 +177,30 @@ const Spectate = () => {
   useEffect(() => {
     if (!fight || !fightId) return;
     
+    // Get cocks for this effect
+    const c1 = fight?.cock1 || cocks.find(c => c.id === fight?.cock1Id);
+    const c2 = fight?.cock2 || cocks.find(c => c.id === fight?.cock2Id);
+    
     if (fight.status === 'betting') {
       setFightPhase('betting');
       setArenaPhase('idle');
       setDisplayHealth({ cock1: 100, cock2: 100 });
       setAnimationStarted(false);
-    } else if (fight.status === 'fighting' && !animationStarted && cock1 && cock2) {
+    } else if (fight.status === 'fighting' && !animationStarted && c1 && c2) {
       console.log('[Spectate] 🎬 Fight is FIGHTING - starting replay...');
       setAnimationStarted(true);
       void playFightReplay();
     } else if (fight.status === 'finished') {
       setFightPhase('finished');
       setArenaPhase('finished');
-      if (fight.winnerId && cock1 && cock2) {
+      if (fight.winnerId && c1 && c2) {
         setKnockoutInfo({
           winnerId: fight.winnerId,
-          loserId: fight.winnerId === cock1.id ? cock2.id : cock1.id,
+          loserId: fight.winnerId === c1.id ? c2.id : c1.id,
         });
       }
     }
-  }, [fight?.status, fight?.winnerId, fightId, animationStarted, cock1, cock2]);
+  }, [fight?.status, fight?.winnerId, fightId, animationStarted, cocks]);
 
   // Removed - using polling instead
 
